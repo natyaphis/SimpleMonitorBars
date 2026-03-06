@@ -1,0 +1,31 @@
+## Interface: 120001, 120000
+## Title: SimpleMonitorBars
+## Notes: Monitor Bars for Cooldown/Aura Tracking
+## Notes-zhCN: 冷却与增益监控条
+## Notes-zhTW: 冷卻與增益監控條
+## Author: NatYaphis
+## Version: 1.0.0
+## SavedVariables: SimpleMonitorBarsDB, SimpleMonitorBarsDB_Profiles
+## SavedVariablesPerCharacter: SimpleMonitorBarsDB_Char
+## IconTexture: Interface\AddOns\SimpleMonitorBars\Media\Icon
+## Category: Combat
+## Category-zhCN: 战斗
+## Category-zhTW: 戰鬥
+
+Libs\libs.xml
+
+Locales\enUS.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+Core\Defaults.lua
+Core\Serializer.lua
+Core\Migration.lua
+Core\Config.lua
+MonitorBars\Scanner.lua
+MonitorBars\Bars.lua
+Init.lua
+Skins\Widgets.lua
+Skins\GeneralTab.lua
+Skins\ProfilesTab.lua
+Skins\MonitorBarsTab.lua
+Skins\Settings.lua
