@@ -23,6 +23,10 @@ end
 local function OnTabSelected(container, _, group)
     -- Reuse the same scroll container so tab switches don't flash from full teardown/rebuild.
     local scroll = container._smbScroll
+    if scroll and (not scroll.frame or scroll.parent ~= container or (AceGUI and AceGUI.IsReleasing and AceGUI:IsReleasing(scroll))) then
+        container._smbScroll = nil
+        scroll = nil
+    end
     if not scroll then
         scroll = AceGUI:Create("ScrollFrame")
         scroll:SetLayout("List")
@@ -164,6 +168,7 @@ local function ToggleSettings()
     HideDefaultFooterControls(frame)
 
     local tabs = AceGUI:Create("TabGroup")
+    tabs._smbScroll = nil
     tabs:SetTabs(GetTabList())
     tabs:SetLayout("Fill")
     tabs:SetCallback("OnGroupSelected", OnTabSelected)
