@@ -1,6 +1,6 @@
 
 -- Main settings window and tab routing.
-local _, ns = ...
+local addonName, ns = ...
 
 local L = ns.L
 local AceGUI
@@ -10,7 +10,14 @@ local FOOTER_BUTTON_HEIGHT = 24
 local FOOTER_BUTTON_GAP = 8
 local FOOTER_SIDE_INSET = 14
 local TOP_TAB_WIDTH_SCALE = 1.2
-local TOP_TAB_OVERLAP = -10
+local TOP_TAB_OVERLAP = -14
+
+local function GetAddonVersion()
+    if C_AddOns and C_AddOns.GetAddOnMetadata then
+        return C_AddOns.GetAddOnMetadata(addonName, "Version")
+    end
+    return GetAddOnMetadata and GetAddOnMetadata(addonName, "Version")
+end
 
 local function GetTabList()
     return {
@@ -152,17 +159,22 @@ local function ToggleSettings()
     frame.titlebg:ClearAllPoints()
     frame.titlebg:SetPoint("TOP", f, "TOP", 0, 4)
 
+    local versionText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    versionText:SetPoint("TOP", frame.titletext, "BOTTOM", 0, -2)
+    versionText:SetTextColor(1, 1, 1, 0.95)
+    versionText:SetText("Version " .. (GetAddonVersion() or "Unknown"))
+
     local dragBar = CreateFrame("Frame", nil, f)
     dragBar:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
     dragBar:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
-    dragBar:SetHeight(32)
+    dragBar:SetHeight(44)
     dragBar:EnableMouse(true)
     dragBar:SetScript("OnMouseDown", function() f:StartMoving() end)
     dragBar:SetScript("OnMouseUp", function() f:StopMovingOrSizing() end)
     dragBar:SetFrameLevel(f:GetFrameLevel() + 5)
 
     frame.content:ClearAllPoints()
-    frame.content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -40)
+    frame.content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -50)
     frame.content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 56)
 
     HideDefaultFooterControls(frame)
@@ -199,19 +211,25 @@ local function ToggleSettings()
     end)
     btnEM.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
-    local btnLock = CreateFooterButton(f, L.mbLocked, "BOTTOM", f, "BOTTOM", 0, buttonWidth, function(self)
+    local btnLock
+
+    local function RefreshLockButtonText()
+        local isLocked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
+        btnLock:SetText(isLocked and (L.mbAlreadyLocked or L.mbLocked) or L.mbLocked)
+        if isLocked then
+            btnLock.frame:LockHighlight()
+        else
+            btnLock.frame:UnlockHighlight()
+        end
+    end
+
+    btnLock = CreateFooterButton(f, L.mbLocked, "BOTTOM", f, "BOTTOM", 0, buttonWidth, function()
         local locked = not (ns.db and ns.db.monitorBars and ns.db.monitorBars.locked)
         MB:SetLocked(locked)
-        if locked then
-            self.frame:LockHighlight()
-        else
-            self.frame:UnlockHighlight()
-        end
+        RefreshLockButtonText()
     end)
     btnLock.frame:SetFrameLevel(f:GetFrameLevel() + 3)
-    if ns.db and ns.db.monitorBars and ns.db.monitorBars.locked then
-        btnLock.frame:LockHighlight()
-    end
+    RefreshLockButtonText()
 
     local btnClose = CreateFooterButton(f, CLOSE, "BOTTOMRIGHT", f, "BOTTOMRIGHT", -FOOTER_SIDE_INSET, buttonWidth, function()
         frame:Hide()

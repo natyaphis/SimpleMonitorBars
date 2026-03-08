@@ -13,10 +13,22 @@ end
 
 function ns.UI.AddHeading(parent, text)
     local AceGUI = GetAceGUI()
+    local topSpacer = AceGUI:Create("Label")
+    topSpacer:SetText(" ")
+    topSpacer:SetFullWidth(true)
+    topSpacer:SetFontObject(GameFontHighlightSmall)
+    parent:AddChild(topSpacer)
+
     local w = AceGUI:Create("Heading")
     w:SetText(text)
     w:SetFullWidth(true)
     parent:AddChild(w)
+
+    local bottomSpacer = AceGUI:Create("Label")
+    bottomSpacer:SetText(" ")
+    bottomSpacer:SetFullWidth(true)
+    bottomSpacer:SetFontObject(GameFontHighlightSmall)
+    parent:AddChild(bottomSpacer)
 end
 
 

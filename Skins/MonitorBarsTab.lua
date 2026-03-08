@@ -74,6 +74,7 @@ local CONTROL_ROW_SPACING = 3
 local SECTION_SPACER_LINES = "\n"
 local MONITOR_BARS_FLOW_LAYOUT = "SMBFlow3"
 local MONITOR_BARS_SPEC_LAYOUT = "SMBSpecSpread"
+local TEXTURE_DROPDOWN_VISIBLE_ITEMS = 20
 local monitorBarsFlowRegistered = false
 local monitorBarsSpecLayoutRegistered = false
 
@@ -111,6 +112,33 @@ local function GetTextureItems()
     return items, order
 end
 
+local function EnhanceTextureDropdown(dropdown)
+    if not dropdown or not dropdown.pullout or not dropdown.pullout.IterateItems then
+        return
+    end
+
+    dropdown.pullout:SetMaxHeight((TEXTURE_DROPDOWN_VISIBLE_ITEMS * 17) + 34)
+
+    for _, item in dropdown.pullout:IterateItems() do
+        if item and item.userdata and item.userdata.value then
+            if not item._smbTexturePreview then
+                local preview = item.frame:CreateTexture(nil, "BACKGROUND")
+                preview:SetPoint("TOPLEFT", item.frame, "TOPLEFT", 18, -1)
+                preview:SetPoint("BOTTOMRIGHT", item.frame, "BOTTOMRIGHT", -8, 1)
+                preview:SetAlpha(0.9)
+                item._smbTexturePreview = preview
+
+                item.text:SetShadowColor(0, 0, 0, 1)
+                item.text:SetShadowOffset(1, -1)
+            end
+
+            local texPath = LSM and LSM.Fetch and LSM:Fetch("statusbar", item.userdata.value)
+            item._smbTexturePreview:SetTexture(texPath or "Interface\\Buttons\\WHITE8X8")
+            item._smbTexturePreview:Show()
+        end
+    end
+end
+
 local function NewBarDefaults(id, barType, spellID, spellName, unit)
     local playerClass = select(2, UnitClass("player"))
     return {
@@ -142,9 +170,9 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         outline    = "OUTLINE",
         barTexture = "Solid",
         colorThreshold  = 0,
-        thresholdColor  = { 1.0, 0.5, 0.0, 1 },
+        thresholdColor  = { 1.0, 1.0, 1.0, 1 },
         colorThreshold2 = 0,
-        thresholdColor2 = { 1.0, 0.0, 0.0, 1 },
+        thresholdColor2 = { 1.0, 1.0, 0.0, 1 },
         borderStyle     = "whole",
         segmentGap      = 1,
         hideFromCDM     = false,
@@ -406,25 +434,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         parent:AddChild(spacer)
     end
 
-    local function AddSectionHeading(parent, text)
-        local topSpacer = AceGUI:Create("Label")
-        topSpacer:SetText(" ")
-        topSpacer:SetFullWidth(true)
-        topSpacer:SetFontObject(GameFontHighlightSmall)
-        parent:AddChild(topSpacer)
-
-        local heading = AceGUI:Create("Heading")
-        heading:SetText(text)
-        heading:SetFullWidth(true)
-        parent:AddChild(heading)
-
-        local bottomSpacer = AceGUI:Create("Label")
-        bottomSpacer:SetText(" ")
-        bottomSpacer:SetFullWidth(true)
-        bottomSpacer:SetFontObject(GameFontHighlightSmall)
-        parent:AddChild(bottomSpacer)
-    end
-
     local function AddTwoColumnRow(parent)
         local row = AceGUI:Create("SimpleGroup")
         row:SetFullWidth(true)
@@ -458,7 +467,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         container:AddChild(enableCB)
     end
 
-    AddSectionHeading(container, "触发设置")
+    ns.UI.AddHeading(container, "触发设置")
 
     local spellRow = AddTwoColumnRow(container)
     spellRow.noAutoHeight = true
@@ -671,7 +680,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         container:AddChild(chargeTip)
     end
 
-    AddSectionHeading(container, L.mbSpecs)
+    ns.UI.AddHeading(container, L.mbSpecs)
 
     local specGroup = AceGUI:Create("SimpleGroup")
     specGroup:SetFullWidth(true)
@@ -711,7 +720,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end
     AddSpacer(container)
 
-    AddSectionHeading(container, L.generalSettings)
+    ns.UI.AddHeading(container, L.generalSettings)
 
     local styleGroup = AceGUI:Create("SimpleGroup")
     styleGroup:SetFullWidth(true)
@@ -768,7 +777,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(hSlider)
     end
 
-    AddSectionHeading(styleGroup, "材质染色")
+    ns.UI.AddHeading(styleGroup, "材质染色")
 
     local hasTextureDropdown = false
     if barCfg.barShape ~= "Ring" then
@@ -778,6 +787,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             local texDD = AceGUI:Create("Dropdown")
             texDD:SetLabel(L.mbBarTexture)
             texDD:SetList(texItems, texOrder)
+            EnhanceTextureDropdown(texDD)
             texDD:SetValue(barCfg.barTexture or "Solid")
             texDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
             texDD:SetCallback("OnValueChanged", function(_, _, val)
@@ -816,7 +826,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         thresholdColorPicker:SetLabel(L.mbThresholdColor)
         thresholdColorPicker:SetHasAlpha(true)
         thresholdColorPicker:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        local tc = barCfg.thresholdColor or { 1.0, 0.5, 0.0, 1 }
+        local tc = barCfg.thresholdColor or { 1.0, 1.0, 1.0, 1 }
         thresholdColorPicker:SetColor(tc[1], tc[2], tc[3], tc[4])
         local function OnThresholdColor(_, _, r, g, b, a)
             barCfg.thresholdColor = { r, g, b, a }
@@ -832,7 +842,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         thresholdColorPicker2:SetLabel(L.mbThresholdColor2)
         thresholdColorPicker2:SetHasAlpha(true)
         thresholdColorPicker2:SetRelativeWidth(0.48)
-        local tc2 = barCfg.thresholdColor2 or { 1.0, 0.0, 0.0, 1 }
+        local tc2 = barCfg.thresholdColor2 or { 1.0, 1.0, 0.0, 1 }
         thresholdColorPicker2:SetColor(tc2[1], tc2[2], tc2[3], tc2[4])
         thresholdColorPicker2:SetDisabled((barCfg.colorThreshold or 0) == 0)
         local function OnThresholdColor2(_, _, r, g, b, a)
@@ -963,7 +973,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(gapSlider)
     end
 
-    AddSectionHeading(styleGroup, "技能文字")
+    ns.UI.AddHeading(styleGroup, "技能文字")
 
     local skillToggleRow = AddTwoColumnRow(styleGroup)
     skillToggleRow.noAutoHeight = true
@@ -1094,7 +1104,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     SetSkillNameControlsDisabled(not (barCfg.showSpellName or false))
 
-    AddSectionHeading(styleGroup, "层数文字")
+    ns.UI.AddHeading(styleGroup, "层数文字")
 
     local textCB = AceGUI:Create("CheckBox")
     local SetTextControlsDisabled
@@ -1363,6 +1373,7 @@ function ns.BuildMonitorBarsTab(scroll)
 
     local addBtn = AceGUI:Create("Button")
     addBtn:SetText(L.mbAddBar)
+    addBtn:SetHeight(48)
     addBtn:SetFullWidth(true)
     addBtn:SetCallback("OnClick", function()
         ShowCatalog(RebuildContent)
@@ -1378,10 +1389,13 @@ function ns.BuildMonitorBarsTab(scroll)
         return
     end
 
-    local heading = AceGUI:Create("Heading")
-    heading:SetText(L.monitorBars)
-    heading:SetFullWidth(true)
-    scroll:AddChild(heading)
+    local headingSpacer = AceGUI:Create("Label")
+    headingSpacer:SetText("")
+    headingSpacer:SetFullWidth(true)
+    headingSpacer:SetHeight(5)
+    scroll:AddChild(headingSpacer)
+
+    ns.UI.AddHeading(scroll, L.monitorBars)
 
     local selectedVisible = selectedBarID and idToIndex[selectedBarID] ~= nil
     if not selectedVisible then
@@ -1389,7 +1403,7 @@ function ns.BuildMonitorBarsTab(scroll)
     end
 
     local barDD = AceGUI:Create("Dropdown")
-    barDD:SetLabel(L.mbSelectBar)
+    barDD:SetLabel("")
     barDD:SetList(barItems, barOrder)
     barDD:SetValue(selectedBarID)
     barDD:SetFullWidth(true)

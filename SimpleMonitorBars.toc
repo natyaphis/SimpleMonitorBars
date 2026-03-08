@@ -4,7 +4,7 @@
 ## Notes-zhCN: 冷却与增益监控条
 ## Notes-zhTW: 冷卻與增益監控條
 ## Author: NatYaphis
-## Version: 1.0.0
+## Version: 1.0.2
 ## SavedVariables: SimpleMonitorBarsDB, SimpleMonitorBarsDB_Profiles
 ## SavedVariablesPerCharacter: SimpleMonitorBarsDB_Char
 ## IconTexture: Interface\AddOns\SimpleMonitorBars\Media\Icon

@@ -540,18 +540,6 @@ function MB:CreateBarFrame(barCfg)
     f._text:SetTextColor(1, 1, 1, 1)
     f._text:SetJustifyH(AnchorToJustifyH(anchor))
 
-    f._posLabel = f:CreateFontString(nil, "OVERLAY")
-    f._posLabel:SetFont(STANDARD_TEXT_FONT or DEFAULT_FONT, 10, "OUTLINE")
-    f._posLabel:SetPoint("BOTTOM", f, "TOP", 0, 2)
-    f._posLabel:SetTextColor(1, 1, 0, 0.8)
-    f._posLabel:Hide()
-
-    local function UpdatePosLabel(frame)
-        if not frame._posLabel then return end
-        local cfg = frame._cfg or barCfg
-        frame._posLabel:SetFormattedText("X: %.1f  Y: %.1f", cfg.posX or 0, cfg.posY or 0)
-    end
-
     f:EnableMouse(true)
     f:SetMovable(true)
     f:RegisterForDrag("LeftButton")
@@ -598,11 +586,6 @@ function MB:CreateBarFrame(barCfg)
             
             s:ClearAllPoints()
             s:SetPoint("CENTER", p, "CENTER", setX, setY)
-            
-            if s._posLabel then
-                local txt = string.format("X: %.1f  Y: %.1f", setX, setY)
-                s._posLabel:SetText(txt)
-            end
         end)
     end)
     f:SetScript("OnDragStop", function(self)
@@ -636,24 +619,20 @@ function MB:CreateBarFrame(barCfg)
         
         self:ClearAllPoints()
         self:SetPoint("CENTER", p, "CENTER", setX, setY)
-        UpdatePosLabel(self)
     end)
 
     f:SetScript("OnMouseWheel", function(self, delta)
         if ns.db.monitorBars.locked then return end
         local effScale = self:GetEffectiveScale()
         local pp = MB.getPixelPerfectScale(effScale)
-        
-        local step = IsControlKeyDown() and (pp * 10) or pp
-        
+
         if IsShiftKeyDown() then
-            barCfg.posX = MB.getNearestPixel((barCfg.posX or 0) + delta * step, effScale)
+            barCfg.posX = MB.getNearestPixel((barCfg.posX or 0) + delta * pp, effScale)
         else
-            barCfg.posY = MB.getNearestPixel((barCfg.posY or 0) + delta * step, effScale)
+            barCfg.posY = MB.getNearestPixel((barCfg.posY or 0) + delta * pp, effScale)
         end
         self:ClearAllPoints()
         self:SetPoint("CENTER", UIParent, "CENTER", barCfg.posX, barCfg.posY)
-        UpdatePosLabel(self)
     end)
 
     f:SetScript("OnEnter", function(self)
@@ -672,10 +651,6 @@ function MB:CreateBarFrame(barCfg)
 
     local locked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
     f:EnableMouseWheel(not locked)
-    if not locked then
-        UpdatePosLabel(f)
-        f._posLabel:Show()
-    end
 
     f._cfg = barCfg
     f._cooldownID = nil
@@ -864,9 +839,9 @@ local function ApplySegmentColors(barFrame, currentCount)
     if type(currentCount) == "number" then
 
         if threshold2 > 0 and currentCount >= threshold2 then
-            c = cfg.thresholdColor2 or { 1, 0, 0, 1 }
+            c = cfg.thresholdColor2 or { 1, 1, 0, 1 }
         elseif threshold1 > 0 and currentCount >= threshold1 then
-            c = cfg.thresholdColor or { 1, 0.5, 0, 1 }
+            c = cfg.thresholdColor or { 1, 1, 1, 1 }
         end
     end
 
@@ -1945,17 +1920,6 @@ function MB:SetLocked(locked)
     for _, f in pairs(activeFrames) do
         f:EnableMouse(not locked)
         f:EnableMouseWheel(not locked)
-        if f._posLabel then
-            if locked then
-                f._posLabel:Hide()
-            else
-                local cfg = f._cfg
-                if cfg then
-                    f._posLabel:SetFormattedText("X: %.1f  Y: %.1f", cfg.posX or 0, cfg.posY or 0)
-                end
-                f._posLabel:Show()
-            end
-        end
     end
 end
 

@@ -14,10 +14,7 @@ function ns.BuildGeneralTab(scroll)
     content:SetLayout("Flow")
     scroll:AddChild(content)
 
-    local title = AceGUI:Create("Heading")
-    title:SetText(L.overviewSpecBars)
-    title:SetFullWidth(true)
-    content:AddChild(title)
+    ns.UI.AddHeading(content, L.overviewSpecBars)
 
     local desc = AceGUI:Create("Label")
     desc:SetText("|cffaaaaaa" .. L.overviewSpecBarsDesc .. "|r")

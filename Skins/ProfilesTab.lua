@@ -3,6 +3,8 @@ local _, ns = ...
 
 local L = ns.L
 local UI = ns.UI
+local PROFILE_LIST_LAYOUT = "SMBProfileList3"
+local profileListLayoutRegistered = false
 
 local function GetProfileList(db, excludeCurrent)
     local profiles = {}
@@ -36,14 +38,63 @@ local function GetSpecNames()
     return names
 end
 
+local function RegisterProfileLayouts(AceGUI)
+    if profileListLayoutRegistered or not AceGUI then
+        return
+    end
+
+    AceGUI:RegisterLayout(PROFILE_LIST_LAYOUT, function(content, children)
+        local height = 0
+        local width = content.width or content:GetWidth() or 0
+
+        for i = 1, #children do
+            local child = children[i]
+            local frame = child.frame
+
+            frame:ClearAllPoints()
+            frame:Show()
+            if i == 1 then
+                frame:SetPoint("TOPLEFT", content)
+            else
+                frame:SetPoint("TOPLEFT", children[i - 1].frame, "BOTTOMLEFT", 0, -3)
+            end
+
+            if child.width == "fill" then
+                child:SetWidth(width)
+                frame:SetPoint("RIGHT", content)
+
+                if child.DoLayout then
+                    child:DoLayout()
+                end
+            elseif child.width == "relative" then
+                child:SetWidth(width * child.relWidth)
+
+                if child.DoLayout then
+                    child:DoLayout()
+                end
+            end
+
+            height = height + (frame.height or frame:GetHeight() or 0)
+            if i > 1 then
+                height = height + 3
+            end
+        end
+
+        content.obj:LayoutFinished(nil, height)
+    end)
+
+    profileListLayoutRegistered = true
+end
+
 function ns.BuildProfilesTab(scroll)
     local AceGUI = LibStub("AceGUI-3.0")
+    RegisterProfileLayouts(AceGUI)
     local db = ns.acedb
     local LibDualSpec = LibStub("LibDualSpec-1.0", true)
 
     local content = AceGUI:Create("SimpleGroup")
     content:SetFullWidth(true)
-    content:SetLayout("Flow")
+    content:SetLayout(PROFILE_LIST_LAYOUT)
     scroll:AddChild(content)
 
     local function RefreshTab()
@@ -58,12 +109,30 @@ function ns.BuildProfilesTab(scroll)
     currentLabel:SetJustifyH("CENTER")
     content:AddChild(currentLabel)
 
+    local profileItems, profileOrder = GetProfileList(db)
+    local isDualSpecActive = LibDualSpec and db.IsDualSpecEnabled and db:IsDualSpecEnabled()
+
+    local chooseDD = AceGUI:Create("Dropdown")
+    chooseDD:SetLabel(L.profileChooseDesc)
+    chooseDD:SetList(profileItems, profileOrder)
+    chooseDD:SetValue(db:GetCurrentProfile())
+    chooseDD:SetFullWidth(true)
+    if isDualSpecActive then
+        chooseDD:SetDisabled(true)
+    end
+    chooseDD:SetCallback("OnValueChanged", function(_, _, val)
+        db:SetProfile(val)
+        print("|cff00ccff[SimpleMonitorBars]|r " .. format(L.profileLoaded, val))
+        RefreshTab()
+    end)
+    content:AddChild(chooseDD)
+
     UI.AddHeading(content, L.profileNew)
 
     local newDesc = AceGUI:Create("Label")
-    newDesc:SetText("|cffaaaaaa" .. L.profileNewDesc .. "|r")
+    newDesc:SetText("|cffffd200" .. L.profileNewDesc .. "|r")
     newDesc:SetFullWidth(true)
-    newDesc:SetFontObject(GameFontHighlightSmall)
+    newDesc:SetFontObject(GameFontNormal)
     content:AddChild(newDesc)
 
     local newBox = AceGUI:Create("EditBox")
@@ -82,44 +151,16 @@ function ns.BuildProfilesTab(scroll)
     end)
     content:AddChild(newBox)
 
-    UI.AddHeading(content, L.profileChoose)
-
-    local chooseDesc = AceGUI:Create("Label")
-    chooseDesc:SetText("|cffaaaaaa" .. L.profileChooseDesc .. "|r")
-    chooseDesc:SetFullWidth(true)
-    chooseDesc:SetFontObject(GameFontHighlightSmall)
-    content:AddChild(chooseDesc)
-
-    local profileItems, profileOrder = GetProfileList(db)
-    local isDualSpecActive = LibDualSpec and db.IsDualSpecEnabled and db:IsDualSpecEnabled()
-
-    local chooseDD = AceGUI:Create("Dropdown")
-    chooseDD:SetLabel("")
-    chooseDD:SetList(profileItems, profileOrder)
-    chooseDD:SetValue(db:GetCurrentProfile())
-    chooseDD:SetFullWidth(true)
-    if isDualSpecActive then
-        chooseDD:SetDisabled(true)
-    end
-    chooseDD:SetCallback("OnValueChanged", function(_, _, val)
-        db:SetProfile(val)
-        print("|cff00ccff[SimpleMonitorBars]|r " .. format(L.profileLoaded, val))
-        RefreshTab()
-    end)
-    content:AddChild(chooseDD)
-
     local copyItems, copyOrder = GetProfileList(db, true)
     if next(copyItems) then
-        UI.AddHeading(content, L.profileCopyFrom)
-
-        local copyDesc = AceGUI:Create("Label")
-        copyDesc:SetText("|cffaaaaaa" .. L.profileCopyDesc .. "|r")
-        copyDesc:SetFullWidth(true)
-        copyDesc:SetFontObject(GameFontHighlightSmall)
-        content:AddChild(copyDesc)
+        local copyLabel = AceGUI:Create("Label")
+        copyLabel:SetText("|cffffd200" .. L.profileCopyFrom .. "|r")
+        copyLabel:SetFullWidth(true)
+        copyLabel:SetFontObject(GameFontNormal)
+        content:AddChild(copyLabel)
 
         local copyDD = AceGUI:Create("Dropdown")
-        copyDD:SetLabel(L.profileCopyFrom)
+        copyDD:SetLabel("")
         copyDD:SetList(copyItems, copyOrder)
         copyDD:SetFullWidth(true)
         copyDD:SetCallback("OnValueChanged", function(_, _, val)
@@ -132,24 +173,28 @@ function ns.BuildProfilesTab(scroll)
 
     local delItems, delOrder = GetProfileList(db, true)
     if next(delItems) then
-        UI.AddHeading(content, L.profileDelete)
+        local deleteLabel = AceGUI:Create("Label")
+        deleteLabel:SetText("|cffffd200" .. L.profileDelete .. "|r")
+        deleteLabel:SetFullWidth(true)
+        deleteLabel:SetFontObject(GameFontNormal)
+        content:AddChild(deleteLabel)
 
-        local delDesc = AceGUI:Create("Label")
-        delDesc:SetText("|cffaaaaaa" .. L.profileDeleteDesc .. "|r")
-        delDesc:SetFullWidth(true)
-        delDesc:SetFontObject(GameFontHighlightSmall)
-        content:AddChild(delDesc)
+        local deleteGroup = AceGUI:Create("SimpleGroup")
+        deleteGroup:SetFullWidth(true)
+        deleteGroup:SetLayout("Flow")
+        content:AddChild(deleteGroup)
 
         local delDD = AceGUI:Create("Dropdown")
-        delDD:SetLabel(L.profileDelete)
+        delDD:SetLabel("")
         delDD:SetList(delItems, delOrder)
-        delDD:SetFullWidth(true)
-        content:AddChild(delDD)
+        delDD:SetRelativeWidth(0.5)
+        deleteGroup:AddChild(delDD)
 
-        local pendingDel = false
         local delBtn = AceGUI:Create("Button")
         delBtn:SetText("|cffff4444" .. L.profileDelete .. "|r")
-        delBtn:SetFullWidth(true)
+        delBtn:SetRelativeWidth(0.5)
+        delBtn:SetHeight(24)
+        delBtn.alignoffset = 10
         delBtn:SetCallback("OnClick", function()
             local selected = delDD:GetValue()
             if not selected then return end
@@ -157,35 +202,24 @@ function ns.BuildProfilesTab(scroll)
                 print("|cff00ccff[SimpleMonitorBars]|r " .. L.profileCantDeleteCurrent)
                 return
             end
-            if not pendingDel then
-                pendingDel = true
-                delBtn:SetText("|cffff4444" .. L.profileDeleteConfirm .. "|r")
-                C_Timer.After(5, function()
-                    if pendingDel then
-                        pendingDel = false
-                        delBtn:SetText("|cffff4444" .. L.profileDelete .. "|r")
-                    end
-                end)
-            else
-                pendingDel = false
-                db:DeleteProfile(selected)
-                print("|cff00ccff[SimpleMonitorBars]|r " .. format(L.profileDeleted, selected))
-                RefreshTab()
-            end
+            db:DeleteProfile(selected)
+            print("|cff00ccff[SimpleMonitorBars]|r " .. format(L.profileDeleted, selected))
+            RefreshTab()
         end)
-        content:AddChild(delBtn)
+        deleteGroup:AddChild(delBtn)
     end
 
     if LibDualSpec and db.IsDualSpecEnabled then
-        UI.AddHeading(content, L.specProfileEnable)
+        UI.AddHeading(content, L.specProfiles)
 
         local specToggle = AceGUI:Create("CheckBox")
         specToggle:SetLabel("|cffffd200" .. L.specProfileEnable .. "|r")
+        specToggle.text:SetFontObject(GameFontNormal)
         specToggle:SetValue(db:IsDualSpecEnabled())
         specToggle:SetFullWidth(true)
         content:AddChild(specToggle)
 
-        local specGroup = AceGUI:Create("InlineGroup")
+        local specGroup = AceGUI:Create("SimpleGroup")
         specGroup:SetFullWidth(true)
         specGroup:SetLayout("Flow")
         content:AddChild(specGroup)
@@ -257,15 +291,23 @@ function ns.BuildProfilesTab(scroll)
     importGroup:SetLayout("Flow")
     content:AddChild(importGroup)
 
+    local importNameLabel = AceGUI:Create("Label")
+    importNameLabel:SetText("|cffffd200" .. L.importName .. "|r")
+    importNameLabel:SetFullWidth(true)
+    importNameLabel:SetFontObject(GameFontNormal)
+    importGroup:AddChild(importNameLabel)
+
     local importNameBox = AceGUI:Create("EditBox")
-    importNameBox:SetLabel(L.importName)
-    importNameBox:SetWidth(260)
+    importNameBox:SetLabel("")
+    importNameBox:SetRelativeWidth(0.5)
+    importNameBox:SetHeight(24)
     importNameBox:SetCallback("OnEnterPressed", function() end)
     importGroup:AddChild(importNameBox)
 
     local importBtn = AceGUI:Create("Button")
     importBtn:SetText(L.importBtn)
-    importBtn:SetWidth(160)
+    importBtn:SetRelativeWidth(0.5)
+    importBtn:SetHeight(22)
     importBtn:SetCallback("OnClick", function()
         local name = importNameBox:GetText()
         if not name or name:match("^%s*$") then
