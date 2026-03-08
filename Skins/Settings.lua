@@ -56,10 +56,10 @@ local function OnTabSelected(container, _, group)
         ns.BuildProfileTab(scroll)
     end
 
+    if scroll and scroll.DoLayout then
+        scroll:DoLayout()
+    end
     C_Timer.After(0, function()
-        if scroll and scroll.DoLayout then
-            scroll:DoLayout()
-        end
         if container and container.type == "TabGroup" then
             ns._adjustSettingsTabs(container)
         end

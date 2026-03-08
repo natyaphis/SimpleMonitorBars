@@ -112,12 +112,10 @@ local function GetTextureItems()
     return items, order
 end
 
-local function EnhanceTextureDropdown(dropdown)
+local function ApplyTextureDropdownPreviews(dropdown)
     if not dropdown or not dropdown.pullout or not dropdown.pullout.IterateItems then
         return
     end
-
-    dropdown.pullout:SetMaxHeight((TEXTURE_DROPDOWN_VISIBLE_ITEMS * 17) + 34)
 
     for _, item in dropdown.pullout:IterateItems() do
         if item and item.userdata and item.userdata.value then
@@ -135,7 +133,25 @@ local function EnhanceTextureDropdown(dropdown)
             local texPath = LSM and LSM.Fetch and LSM:Fetch("statusbar", item.userdata.value)
             item._smbTexturePreview:SetTexture(texPath or "Interface\\Buttons\\WHITE8X8")
             item._smbTexturePreview:Show()
+        elseif item and item._smbTexturePreview then
+            item._smbTexturePreview:Hide()
         end
+    end
+end
+
+local function EnhanceTextureDropdown(dropdown)
+    if not dropdown or not dropdown.pullout or not dropdown.pullout.IterateItems then
+        return
+    end
+
+    dropdown.pullout:SetMaxHeight((TEXTURE_DROPDOWN_VISIBLE_ITEMS * 17) + 34)
+    ApplyTextureDropdownPreviews(dropdown)
+
+    if not dropdown._smbTexturePreviewHooked and dropdown.pullout.Open then
+        hooksecurefunc(dropdown.pullout, "Open", function()
+            ApplyTextureDropdownPreviews(dropdown)
+        end)
+        dropdown._smbTexturePreviewHooked = true
     end
 end
 
@@ -1141,7 +1157,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     SetSkillNameControlsDisabled(not (barCfg.showSpellName or false))
 
-    ns.UI.AddHeading(styleGroup, "层数文字")
+    ns.UI.AddHeading(styleGroup, "层数/冷却文字")
 
     local textCB = AceGUI:Create("CheckBox")
     local SetTextControlsDisabled
@@ -1280,6 +1296,7 @@ local function CloseCatalogFrame()
 end
 
 ns._closeCatalogFrame = CloseCatalogFrame
+ns._refreshCatalogToggle = nil
 
 local function BuildSpecSpellMap()
     local specSpellMap = {}
@@ -1452,6 +1469,9 @@ local function ShowCatalog(rebuildTab)
     catalogFrame:SetCallback("OnClose", function(w)
         ns._catalogFrame = nil
         catalogFrame = nil
+        if ns._refreshCatalogToggle then
+            ns._refreshCatalogToggle()
+        end
         w:Release()
     end)
 end
@@ -1469,17 +1489,26 @@ function ns.BuildMonitorTab(scroll)
     local function RebuildContent()
         scroll:ReleaseChildren()
         ns.BuildMonitorTab(scroll)
-        C_Timer.After(0, function()
-            if scroll and scroll.DoLayout then scroll:DoLayout() end
-        end)
+        if scroll and scroll.DoLayout then
+            scroll:DoLayout()
+        end
     end
 
     local addBtn = AceGUI:Create("Button")
-    addBtn:SetText(L.mbAddBar)
+    local function RefreshCatalogButtonText()
+        addBtn:SetText((ns._catalogFrame and (L.mbCloseCatalog or "关闭读取技能目录")) or L.mbAddBar)
+    end
+    RefreshCatalogButtonText()
+    ns._refreshCatalogToggle = RefreshCatalogButtonText
     addBtn:SetHeight(48)
     addBtn:SetFullWidth(true)
     addBtn:SetCallback("OnClick", function()
-        ShowCatalog(RebuildContent)
+        if ns._catalogFrame then
+            CloseCatalogFrame()
+        else
+            ShowCatalog(RebuildContent)
+        end
+        RefreshCatalogButtonText()
     end)
     scroll:AddChild(addBtn)
 
@@ -1537,14 +1566,12 @@ function ns.BuildMonitorTab(scroll)
 
         BuildBarConfig(configGroup, barCfg, RebuildContent)
 
-        C_Timer.After(0, function()
-            if detailHost and detailHost.DoLayout then
-                detailHost:DoLayout()
-            end
-            if scroll and scroll.DoLayout then
-                scroll:DoLayout()
-            end
-        end)
+        if detailHost and detailHost.DoLayout then
+            detailHost:DoLayout()
+        end
+        if scroll and scroll.DoLayout then
+            scroll:DoLayout()
+        end
     end
 
     barDD = AceGUI:Create("Dropdown")
@@ -1560,7 +1587,7 @@ function ns.BuildMonitorTab(scroll)
     scroll:AddChild(detailHost)
     BuildDetailSection()
 
-    C_Timer.After(0, function()
-        if scroll and scroll.DoLayout then scroll:DoLayout() end
-    end)
+    if scroll and scroll.DoLayout then
+        scroll:DoLayout()
+    end
 end
