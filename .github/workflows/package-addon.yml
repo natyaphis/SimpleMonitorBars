@@ -25,6 +25,7 @@ jobs:
             --exclude ".git/" \
             --exclude ".github/" \
             --exclude "scripts/" \
+            --exclude "AGENTS.md" \
             --exclude ".vscode/" \
             --exclude ".gitignore" \
             --exclude ".gitattributes" \
