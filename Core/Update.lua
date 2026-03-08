@@ -33,7 +33,7 @@ local function MigrateMonitorBars(profileData)
         barColor = { 0.4, 0.75, 1.0, 1 },
         bgColor = { 0.1, 0.1, 0.1, 0.6 },
         borderColor = { 0, 0, 0, 1 },
-        showIcon = true,
+        showIcon = false,
         showText = true,
         textAlign = "RIGHT",
         textOffsetX = -4,

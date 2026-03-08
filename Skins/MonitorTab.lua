@@ -160,7 +160,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         bgColor     = { 0.1, 0.1, 0.1, 0.6 },
         borderColor = { 0, 0, 0, 1 },
         maskAndBorderStyle = "1",
-        showIcon   = true,
+        showIcon   = false,
         showText   = false,
         textAlign  = "RIGHT",
         textOffsetX = -5,
@@ -394,6 +394,58 @@ local function RegisterMonitorBarsSpecLayout()
     monitorBarsSpecLayoutRegistered = true
 end
 
+local function AddDeleteButton(parent, barCfg, rebuildAll, widthSource)
+    local deleteBtn = AceGUI:Create("Button")
+    local function SetDeleteButtonText(text)
+        deleteBtn:SetText(text)
+    end
+
+    SetDeleteButtonText(L.mbDeleteBar)
+    deleteBtn:SetFullWidth(true)
+
+    local pendingDelete = false
+    deleteBtn:SetCallback("OnClick", function()
+        if not pendingDelete then
+            pendingDelete = true
+            SetDeleteButtonText(L.mbDeleteConfirm)
+            C_Timer.After(5, function()
+                if pendingDelete then
+                    pendingDelete = false
+                    SetDeleteButtonText(L.mbDeleteBar)
+                end
+            end)
+            return
+        end
+
+        pendingDelete = false
+        MB:DestroyBar(barCfg.id)
+        local bars = ns.db.monitorBars.bars
+        for i, b in ipairs(bars) do
+            if b.id == barCfg.id then
+                table.remove(bars, i)
+                break
+            end
+        end
+        selectedBarID = nil
+        rebuildAll()
+    end)
+
+    parent:AddChild(deleteBtn)
+
+    if widthSource and widthSource.frame then
+        C_Timer.After(0, function()
+            if not deleteBtn or not deleteBtn.frame or not widthSource.frame then return end
+            local width = widthSource.frame:GetWidth()
+            if width and width > 0 then
+                deleteBtn:SetWidth(width)
+                if deleteBtn.frame.SetWidth then
+                    deleteBtn.frame:SetWidth(width)
+                end
+            end
+        end)
+    end
+end
+
 local function BuildBarConfig(container, barCfg, rebuildAll)
     barCfg.width = tonumber(barCfg.width) or 300
     barCfg.height = tonumber(barCfg.height) or 15
@@ -449,23 +501,8 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         barCfg.enabled = val
         MB:RebuildAllBars()
     end)
-    local showTrackerHint = (barCfg.barType == "stack" or barCfg.barType == "duration") and L.mbTrackerHint ~= ""
-    if showTrackerHint then
-        local headerRow = AddTwoColumnRow(container)
-
-        enableCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        headerRow:AddChild(enableCB)
-
-        local trackerHint = AceGUI:Create("Label")
-        trackerHint:SetText("|cffffcc00" .. L.mbTrackerHint .. "|r")
-        trackerHint:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        trackerHint:SetFontObject(GameFontHighlightSmall)
-        trackerHint:SetJustifyH("RIGHT")
-        headerRow:AddChild(trackerHint)
-    else
-        enableCB:SetFullWidth(true)
-        container:AddChild(enableCB)
-    end
+    enableCB:SetFullWidth(true)
+    container:AddChild(enableCB)
 
     ns.UI.AddHeading(container, "触发设置")
 
@@ -1230,38 +1267,60 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     SetTextControlsDisabled(barCfg.showText == false)
 
-    local deleteBtn = AceGUI:Create("Button")
-    deleteBtn:SetText("|cffff4444" .. L.mbDeleteBar .. "|r")
-    deleteBtn:SetFullWidth(true)
-    local pendingDelete = false
-    deleteBtn:SetCallback("OnClick", function()
-        if not pendingDelete then
-            pendingDelete = true
-            deleteBtn:SetText("|cffff4444" .. L.mbDeleteConfirm .. "|r")
-            C_Timer.After(5, function()
-                if pendingDelete then
-                    pendingDelete = false
-                    deleteBtn:SetText("|cffff4444" .. L.mbDeleteBar .. "|r")
-                end
-            end)
-        else
-            pendingDelete = false
-            MB:DestroyBar(barCfg.id)
-            local bars = ns.db.monitorBars.bars
-            for i, b in ipairs(bars) do
-                if b.id == barCfg.id then
-                    table.remove(bars, i)
-                    break
-                end
-            end
-            selectedBarID = nil
-            rebuildAll()
-        end
-    end)
-    container:AddChild(deleteBtn)
 end
 
 local catalogFrame = nil
+
+local function CloseCatalogFrame()
+    if catalogFrame then
+        catalogFrame:Release()
+        catalogFrame = nil
+    end
+    ns._catalogFrame = nil
+end
+
+ns._closeCatalogFrame = CloseCatalogFrame
+
+local function BuildSpecSpellMap()
+    local specSpellMap = {}
+    local numSpecs = GetNumSpecializations() or 0
+
+    for specIndex = 1, numSpecs do
+        local spells = {}
+        local entries = { GetSpecializationSpells(specIndex) }
+        for i = 1, #entries, 2 do
+            local spellID = entries[i]
+            if type(spellID) == "number" and spellID > 0 then
+                spells[spellID] = true
+
+                if C_Spell and C_Spell.GetBaseSpell then
+                    local baseSpellID = C_Spell.GetBaseSpell(spellID)
+                    if type(baseSpellID) == "number" and baseSpellID > 0 then
+                        spells[baseSpellID] = true
+                    end
+                end
+            end
+        end
+        specSpellMap[specIndex] = spells
+    end
+
+    return specSpellMap
+end
+
+local function GetMatchingSpecsForSpell(specSpellMap, spellID)
+    local matchedSpecs = {}
+    if not spellID or spellID <= 0 then
+        return matchedSpecs
+    end
+
+    for specIndex, spells in pairs(specSpellMap) do
+        if spells and spells[spellID] then
+            matchedSpecs[#matchedSpecs + 1] = specIndex
+        end
+    end
+
+    return matchedSpecs
+end
 
 local function ShowCatalog(rebuildTab)
     if InCombatLockdown() then
@@ -1283,6 +1342,9 @@ local function ShowCatalog(rebuildTab)
         return false
     end
 
+    local currentSpec = GetSpecialization() or 1
+    local numSpecs = GetNumSpecializations() or 0
+    local specSpellMap = BuildSpecSpellMap()
     local specialEntries = {}
     if not ContainsSpell(cooldowns, ICICLES_SPELL_ID) and not ContainsSpell(auras, ICICLES_SPELL_ID) then
         specialEntries[#specialEntries + 1] = {
@@ -1290,13 +1352,11 @@ local function ShowCatalog(rebuildTab)
             name = iciclesName,
             icon = iciclesIcon,
             unit = "player",
+            barType = "stack",
         }
     end
 
-    if catalogFrame then
-        catalogFrame:Release()
-        catalogFrame = nil
-    end
+    CloseCatalogFrame()
 
     local cfg = ns.db.monitorBars
 
@@ -1320,29 +1380,67 @@ local function ShowCatalog(rebuildTab)
     end
 
 
+    local catalogEntries = {}
+    local monitoredSpellIDs = {}
+    for _, bar in ipairs(cfg.bars or {}) do
+        if bar and bar.spellID and bar.spellID > 0 then
+            monitoredSpellIDs[bar.spellID] = true
+        end
+    end
+
+    local function AddCatalogEntry(target, entry, barType)
+        target[#target + 1] = {
+            spellID = entry.spellID,
+            name = entry.name,
+            icon = entry.icon,
+            unit = entry.unit,
+            barType = barType,
+            monitored = monitoredSpellIDs[entry.spellID] == true,
+        }
+    end
+
+    local function ClassifyCatalogEntry(entry, barType)
+        local matchedSpecs = GetMatchingSpecsForSpell(specSpellMap, entry.spellID)
+        local isCurrentSpecOnly = (#matchedSpecs > 0 and #matchedSpecs < numSpecs)
+
+        if isCurrentSpecOnly then
+            for _, specIndex in ipairs(matchedSpecs) do
+                if specIndex == currentSpec then
+                    AddCatalogEntry(catalogEntries, entry, barType)
+                    return
+                end
+            end
+        end
+
+        AddCatalogEntry(catalogEntries, entry, barType)
+    end
+
+    for _, entry in ipairs(cooldowns) do
+        ClassifyCatalogEntry(entry, "charge")
+    end
+    for _, entry in ipairs(auras) do
+        ClassifyCatalogEntry(entry, "stack")
+    end
+    for _, entry in ipairs(specialEntries) do
+        ClassifyCatalogEntry(entry, entry.barType or "stack")
+    end
+
+    local function SortEntries(entries)
+        table.sort(entries, function(a, b)
+            return (a.name or "") < (b.name or "")
+        end)
+    end
+
+    SortEntries(catalogEntries)
+
     catalogFrame = ns.UI.OpenSpellCatalogFrame(
-        "SimpleMonitorBars - " .. L.mbScanCatalog,
+        L.mbScanCatalog,
         {
             {
-                heading  = L.mbCatalogSpecial,
-                entries  = specialEntries,
+                heading  = "",
+                entries  = catalogEntries,
                 onSelect = function(entry)
-                    AddBar(entry.spellID, entry.name, "stack", entry.unit or "player")
-                end,
-            },
-            {
-                heading  = L.mbCatalogCooldowns,
-                entries  = cooldowns,
-                onSelect = function(entry)
-                    AddBar(entry.spellID, entry.name, "charge", entry.unit)
-                end,
-            },
-            {
-                heading  = L.mbCatalogAuras,
-                entries  = auras,
-                onSelect = function(entry)
-
-                    AddBar(entry.spellID, entry.name, "stack", entry.unit)
+                    AddBar(entry.spellID, entry.name, entry.barType or "charge", entry.unit or "player")
                 end,
             },
         },
@@ -1350,7 +1448,12 @@ local function ShowCatalog(rebuildTab)
             AddBar(spellID, spellName, "charge", "player")
         end
     )
-    catalogFrame:SetCallback("OnClose", function(w) w:Release(); catalogFrame = nil end)
+    ns._catalogFrame = catalogFrame
+    catalogFrame:SetCallback("OnClose", function(w)
+        ns._catalogFrame = nil
+        catalogFrame = nil
+        w:Release()
+    end)
 end
 
 function ns.BuildMonitorTab(scroll)
@@ -1402,28 +1505,60 @@ function ns.BuildMonitorTab(scroll)
         selectedBarID = barOrder[1]
     end
 
-    local barDD = AceGUI:Create("Dropdown")
+    local barDD
+    local detailHost = AceGUI:Create("SimpleGroup")
+    detailHost:SetFullWidth(true)
+    detailHost:SetLayout("List")
+
+    local function BuildDetailSection()
+        detailHost:ReleaseChildren()
+
+        local selectedIndex = selectedBarID and idToIndex[selectedBarID]
+        local barCfg = selectedIndex and cfg.bars[selectedIndex] or nil
+        if not barCfg then
+            if detailHost.DoLayout then
+                detailHost:DoLayout()
+            end
+            return
+        end
+
+        local deleteSpacer = AceGUI:Create("Label")
+        deleteSpacer:SetText("\n")
+        deleteSpacer:SetFullWidth(true)
+        detailHost:AddChild(deleteSpacer)
+
+        AddDeleteButton(detailHost, barCfg, RebuildContent, barDD)
+
+        local configGroup = AceGUI:Create("InlineGroup")
+        configGroup:SetTitle("")
+        configGroup:SetFullWidth(true)
+        configGroup:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
+        detailHost:AddChild(configGroup)
+
+        BuildBarConfig(configGroup, barCfg, RebuildContent)
+
+        C_Timer.After(0, function()
+            if detailHost and detailHost.DoLayout then
+                detailHost:DoLayout()
+            end
+            if scroll and scroll.DoLayout then
+                scroll:DoLayout()
+            end
+        end)
+    end
+
+    barDD = AceGUI:Create("Dropdown")
     barDD:SetLabel("")
     barDD:SetList(barItems, barOrder)
     barDD:SetValue(selectedBarID)
     barDD:SetFullWidth(true)
     barDD:SetCallback("OnValueChanged", function(_, _, val)
         selectedBarID = val
-        RebuildContent()
+        BuildDetailSection()
     end)
     scroll:AddChild(barDD)
-
-    local selectedIndex = selectedBarID and idToIndex[selectedBarID]
-    local barCfg = selectedIndex and cfg.bars[selectedIndex] or nil
-    if barCfg then
-        local configGroup = AceGUI:Create("InlineGroup")
-        configGroup:SetTitle("")
-        configGroup:SetFullWidth(true)
-        configGroup:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
-        scroll:AddChild(configGroup)
-
-        BuildBarConfig(configGroup, barCfg, RebuildContent)
-    end
+    scroll:AddChild(detailHost)
+    BuildDetailSection()
 
     C_Timer.After(0, function()
         if scroll and scroll.DoLayout then scroll:DoLayout() end

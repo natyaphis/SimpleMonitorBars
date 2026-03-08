@@ -41,13 +41,42 @@ end
 
 function ns.UI.OpenSpellCatalogFrame(title, sections, onManualAdd)
     local AceGUI = GetAceGUI()
+    local FRAME_WIDTH = 300
+    local SIDE_INSET = 14
+    local HEADER_BOTTOM_INSET = 42
+    local FOOTER_TOP_INSET = 44
 
     local frame = AceGUI:Create("Frame")
     frame:SetTitle(title)
-    frame:SetWidth(420)
+    frame:SetWidth(FRAME_WIDTH)
     frame:SetHeight(500)
     frame:SetLayout("Fill")
     frame:EnableResize(false)
+
+    frame.titlebg:ClearAllPoints()
+    frame.titlebg:SetPoint("TOP", frame.frame, "TOP", 0, 4)
+
+    local settingsFrame = ns._settingsFrame and ns._settingsFrame.frame
+    if settingsFrame then
+        frame.frame:ClearAllPoints()
+        frame.frame:SetPoint("TOPRIGHT", settingsFrame, "TOPLEFT", -3, 0)
+    end
+
+    local divider = frame.frame:CreateTexture(nil, "BORDER")
+    divider:SetColorTexture(1, 1, 1, 0.12)
+    divider:SetPoint("TOPLEFT", frame.frame, "TOPLEFT", SIDE_INSET, -HEADER_BOTTOM_INSET)
+    divider:SetPoint("TOPRIGHT", frame.frame, "TOPRIGHT", -SIDE_INSET, -HEADER_BOTTOM_INSET)
+    divider:SetHeight(1)
+
+    local bottomDivider = frame.frame:CreateTexture(nil, "BORDER")
+    bottomDivider:SetColorTexture(1, 1, 1, 0.12)
+    bottomDivider:SetPoint("BOTTOMLEFT", frame.frame, "BOTTOMLEFT", SIDE_INSET, FOOTER_TOP_INSET)
+    bottomDivider:SetPoint("BOTTOMRIGHT", frame.frame, "BOTTOMRIGHT", -SIDE_INSET, FOOTER_TOP_INSET)
+    bottomDivider:SetHeight(1)
+
+    frame.content:ClearAllPoints()
+    frame.content:SetPoint("TOPLEFT", frame.frame, "TOPLEFT", SIDE_INSET, -(HEADER_BOTTOM_INSET + 10))
+    frame.content:SetPoint("BOTTOMRIGHT", frame.frame, "BOTTOMRIGHT", -SIDE_INSET, FOOTER_TOP_INSET + 12)
 
     local scroll = AceGUI:Create("ScrollFrame")
     scroll:SetLayout("Flow")
@@ -57,12 +86,6 @@ function ns.UI.OpenSpellCatalogFrame(title, sections, onManualAdd)
 
 
     if onManualAdd then
-        local manualGroup = AceGUI:Create("InlineGroup")
-        manualGroup:SetTitle(ns.L and ns.L.bgManualAdd or "Manual Spell ID")
-        manualGroup:SetFullWidth(true)
-        manualGroup:SetLayout("Flow")
-        scroll:AddChild(manualGroup)
-
         local manualBox = AceGUI:Create("EditBox")
         manualBox:SetLabel(ns.L and ns.L.spellID or "Spell ID")
         manualBox:SetFullWidth(true)
@@ -73,7 +96,7 @@ function ns.UI.OpenSpellCatalogFrame(title, sections, onManualAdd)
             onManualAdd(spellID, spellName)
             frame:Release()
         end)
-        manualGroup:AddChild(manualBox)
+        scroll:AddChild(manualBox)
     end
 
 
@@ -81,15 +104,14 @@ function ns.UI.OpenSpellCatalogFrame(title, sections, onManualAdd)
     for _, section in ipairs(sections) do
         if section.entries and #section.entries > 0 then
             hasAny = true
-            local heading = AceGUI:Create("Heading")
-            heading:SetText(section.heading .. " (" .. #section.entries .. ")")
-            heading:SetFullWidth(true)
-            scroll:AddChild(heading)
-
             for _, entry in ipairs(section.entries) do
                 local btn = AceGUI:Create("InteractiveLabel")
                 local tex = entry.icon and ("|T" .. entry.icon .. ":16:16:0:0|t ") or ""
-                btn:SetText(tex .. "|cffffffff" .. entry.name .. "|r  |cff888888(" .. entry.spellID .. ")|r")
+                local monitoredSuffix = ""
+                if entry.monitored then
+                    monitoredSuffix = " |cff33ff99- " .. ((ns.L and ns.L.mbAlreadyMonitored) or "Monitored") .. "|r"
+                end
+                btn:SetText(tex .. "|cffffffff" .. entry.name .. "|r  |cff888888(" .. entry.spellID .. ")|r" .. monitoredSuffix)
                 btn:SetFullWidth(true)
                 btn:SetHighlight("Interface\\QuestFrame\\UI-QuestTitleHighlight")
                 btn:SetCallback("OnClick", function()

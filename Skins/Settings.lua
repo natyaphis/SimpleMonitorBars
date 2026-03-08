@@ -137,6 +137,9 @@ local function CreateFooterButton(parent, text, anchorPoint, relativeTo, relativ
     btn:SetText(text)
     btn:SetWidth(width)
     btn:SetHeight(height or FOOTER_BUTTON_HEIGHT)
+    if btn.text then
+        btn.text:SetTextColor(1, 0.82, 0, 1)
+    end
     btn.frame:SetParent(parent)
     btn.frame:ClearAllPoints()
     btn.frame:SetPoint(anchorPoint, relativeTo, relativePoint, xOffset, yOffset or 15)
@@ -155,9 +158,11 @@ local function ToggleSettings()
     local frame = AceGUI:Create("Frame")
     frame:SetTitle("SimpleMonitorBars by NatYaphis")
     frame:SetWidth(400)
-    frame:SetHeight(600)
+    frame:SetHeight(700)
     frame:SetLayout("Fill")
     frame:EnableResize(false)
+    frame.frame:ClearAllPoints()
+    frame.frame:SetPoint("CENTER", UIParent, "CENTER", 600, 30)
 
     local f = frame.frame
     frame.titlebg:ClearAllPoints()
@@ -259,11 +264,24 @@ local function ToggleSettings()
     btnAdvanced.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
     local btnClose = CreateFooterButton(f, CLOSE, "BOTTOMLEFT", f, "BOTTOMLEFT", FOOTER_SIDE_INSET, closeButtonWidth, function()
-        frame:Hide()
+        if ns._closeCatalogFrame then
+            ns._closeCatalogFrame()
+        elseif ns._catalogFrame then
+            ns._catalogFrame:Release()
+            ns._catalogFrame = nil
+        end
+        frame:Release()
+        ns._settingsFrame = nil
     end, FOOTER_BOTTOM_ROW_Y, FOOTER_CLOSE_BUTTON_HEIGHT)
     btnClose.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
     frame:SetCallback("OnClose", function(widget)
+        if ns._closeCatalogFrame then
+            ns._closeCatalogFrame()
+        elseif ns._catalogFrame then
+            ns._catalogFrame:Release()
+            ns._catalogFrame = nil
+        end
         dragBar:Hide()
         btnEM:Release()
         btnLock:Release()
