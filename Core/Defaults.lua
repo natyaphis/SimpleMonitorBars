@@ -7,10 +7,6 @@ ns.defaults = {
         nextID = 1,
         bars = {},
     },
-
-    minimap = {
-        hide = false,
-    },
 }
 
 local function DeepCopy(src)

@@ -49,11 +49,11 @@ local function OnTabSelected(container, _, group)
     end
 
     if group == "general" then
-        ns.BuildGeneralTab(scroll)
+        ns.BuildClassViewTab(scroll)
     elseif group == "monitorBars" then
-        ns.BuildMonitorBarsTab(scroll)
+        ns.BuildMonitorTab(scroll)
     elseif group == "profiles" then
-        ns.BuildProfilesTab(scroll)
+        ns.BuildProfileTab(scroll)
     end
 
     C_Timer.After(0, function()

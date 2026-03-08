@@ -3,7 +3,7 @@ local _, ns = ...
 
 local L = ns.L
 
-function ns.BuildGeneralTab(scroll)
+function ns.BuildClassViewTab(scroll)
     local AceGUI = LibStub("AceGUI-3.0")
     local bars = (ns.db and ns.db.monitorBars and ns.db.monitorBars.bars) or {}
     local playerClassTag = select(2, UnitClass("player"))

@@ -449,7 +449,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         barCfg.enabled = val
         MB:RebuildAllBars()
     end)
-    local showTrackerHint = (barCfg.barType == "stack" or barCfg.barType == "duration")
+    local showTrackerHint = (barCfg.barType == "stack" or barCfg.barType == "duration") and L.mbTrackerHint ~= ""
     if showTrackerHint then
         local headerRow = AddTwoColumnRow(container)
 
@@ -1353,7 +1353,7 @@ local function ShowCatalog(rebuildTab)
     catalogFrame:SetCallback("OnClose", function(w) w:Release(); catalogFrame = nil end)
 end
 
-function ns.BuildMonitorBarsTab(scroll)
+function ns.BuildMonitorTab(scroll)
     -- Top-level tab builder; rebuilding this function refreshes dependent controls.
     AceGUI = AceGUI or LibStub("AceGUI-3.0")
     LSM = LSM or LibStub("LibSharedMedia-3.0", true)
@@ -1365,7 +1365,7 @@ function ns.BuildMonitorBarsTab(scroll)
 
     local function RebuildContent()
         scroll:ReleaseChildren()
-        ns.BuildMonitorBarsTab(scroll)
+        ns.BuildMonitorTab(scroll)
         C_Timer.After(0, function()
             if scroll and scroll.DoLayout then scroll:DoLayout() end
         end)

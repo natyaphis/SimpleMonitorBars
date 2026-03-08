@@ -73,7 +73,6 @@ In the monitor settings tab you can:
 The addon supports:
 
 - per-character profiles
-- specialization profile switching
 - config import / export
 - profile copy, reset, and deletion
 
@@ -93,8 +92,8 @@ The addon supports:
 ## Project Structure
 
 ```text
-Core/         Database, config, migration, serialization
-MonitorBars/  Runtime scanning and bar rendering
+Core/         Defaults, config, profile transfer, and schema updates
+Bars/         Runtime scanning and bar rendering
 Skins/        Settings UI
 Locales/      Localization files
 Media/        Textures and icon assets

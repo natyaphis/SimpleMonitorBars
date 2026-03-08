@@ -69,7 +69,7 @@ local function RegisterProfileLayouts(AceGUI)
     profileListLayoutRegistered = true
 end
 
-function ns.BuildProfilesTab(scroll)
+function ns.BuildProfileTab(scroll)
     local AceGUI = LibStub("AceGUI-3.0")
     RegisterProfileLayouts(AceGUI)
     local db = ns.acedb

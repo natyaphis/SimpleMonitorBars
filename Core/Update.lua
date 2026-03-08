@@ -82,19 +82,8 @@ local function MigrateMonitorBars(profileData)
     end
 end
 
-local function MigrateMinimap(profileData)
-    if type(profileData.minimap) ~= "table" then
-        profileData.minimap = DeepCopy(ns.defaults.minimap)
-        return
-    end
-    if profileData.minimap.hide == nil then
-        profileData.minimap.hide = false
-    end
-end
-
 function ns.MigrateOldData(profileData)
     -- Run every migration stage in a fixed order.
     if type(profileData) ~= "table" then return end
     MigrateMonitorBars(profileData)
-    MigrateMinimap(profileData)
 end

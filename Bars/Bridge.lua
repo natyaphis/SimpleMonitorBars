@@ -55,12 +55,6 @@ local VIEWER_SOURCES = {
     { name = "UtilityCooldownViewer", aura = false },
 }
 
-local CDM_VIEWERS = {}
-for i = 1, #VIEWER_SOURCES do
-    CDM_VIEWERS[i] = VIEWER_SOURCES[i].name
-end
-MB.CDM_VIEWERS = CDM_VIEWERS
-
 local function GetCooldownIDFromFrame(frame)
     local cdID = frame.cooldownID
     if not cdID and frame.cooldownInfo then
@@ -68,7 +62,6 @@ local function GetCooldownIDFromFrame(frame)
     end
     return cdID
 end
-MB.GetCooldownIDFromFrame = GetCooldownIDFromFrame
 
 local function ResolveSpellID(info)
     if not info then return nil end
@@ -76,7 +69,6 @@ local function ResolveSpellID(info)
     local linked = info.linkedSpellIDs and info.linkedSpellIDs[1]
     return linked or info.overrideSpellID or (base > 0 and base) or nil
 end
-MB.ResolveSpellID = ResolveSpellID
 
 local function MapSpellInfo(info, cdID, forceOverwrite)
     if not info then return end
