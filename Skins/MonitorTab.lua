@@ -1038,10 +1038,8 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     nameCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     skillToggleRow:AddChild(nameCB)
 
-    local hasIconOption = false
     if barCfg.barShape ~= "Ring" then
         local iconCB = AceGUI:Create("CheckBox")
-        hasIconOption = true
         iconCB:SetLabel(L.mbShowIcon)
         iconCB:SetValue(barCfg.showIcon ~= false)
         iconCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)

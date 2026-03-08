@@ -4,7 +4,6 @@ local _, ns = ...
 
 local MB = ns.MonitorBars
 local LSM = LibStub("LibSharedMedia-3.0", true)
-local DEFAULT_FONT = ns._mbConst.DEFAULT_FONT
 local BAR_TEXTURE  = ns._mbConst.BAR_TEXTURE
 local SEGMENT_GAP  = ns._mbConst.SEGMENT_GAP
 local UPDATE_INTERVAL = ns._mbConst.UPDATE_INTERVAL
@@ -987,6 +986,20 @@ local function GetIciclesStacks()
     return count > 0, count, aura.auraInstanceID
 end
 
+local function FormatRemainingTimeText(remaining)
+    local ok, result = pcall(function()
+        local num = tonumber(remaining)
+        if num then
+            return string.format("%.1f", num)
+        end
+        return remaining
+    end)
+    if ok and result then
+        return result
+    end
+    return remaining or ""
+end
+
 UpdateStackBar = function(barFrame)
     local cfg = barFrame._cfg
     if not cfg or cfg.barType ~= "stack" then return end
@@ -1226,20 +1239,8 @@ local function UpdateRegularCooldownBar(barFrame)
     ApplySegmentColors(barFrame, isOnCooldown and 0 or 1)
 
     if cfg.showText ~= false and barFrame._text then
-
-
         if isOnCooldown and not isOnGCD and durObj then
-            local remaining = durObj:GetRemainingDuration()
-            local ok, result = pcall(function()
-                local num = tonumber(remaining)
-                if num then return string.format("%.1f", num) end
-                return remaining
-            end)
-            if ok and result then
-                barFrame._text:SetText(result)
-            else
-                barFrame._text:SetText(remaining or "")
-            end
+            barFrame._text:SetText(FormatRemainingTimeText(durObj:GetRemainingDuration()))
         else
             barFrame._text:SetText("")
         end
@@ -1365,19 +1366,7 @@ local function UpdateChargeBar(barFrame)
         if type(exactCharges) == "number" and exactCharges >= maxCharges then
             barFrame._text:SetText("")
         elseif chargeDurObj then
-            local remaining = chargeDurObj:GetRemainingDuration()
-            local ok, result = pcall(function()
-                local num = tonumber(remaining)
-                if num then
-                    return string.format("%.1f", num)
-                end
-                return remaining
-            end)
-            if ok and result then
-                barFrame._text:SetText(result)
-            else
-                barFrame._text:SetText(remaining or "")
-            end
+            barFrame._text:SetText(FormatRemainingTimeText(chargeDurObj:GetRemainingDuration()))
         else
             barFrame._text:SetText("")
         end

@@ -132,6 +132,15 @@ local function HideDefaultFooterControls(frame)
     end
 end
 
+local function CloseCatalogIfOpen()
+    if ns._closeCatalogFrame then
+        ns._closeCatalogFrame()
+    elseif ns._catalogFrame then
+        ns._catalogFrame:Release()
+        ns._catalogFrame = nil
+    end
+end
+
 local function CreateFooterButton(parent, text, anchorPoint, relativeTo, relativePoint, xOffset, width, onClick, yOffset, height)
     local btn = AceGUI:Create("Button")
     btn:SetText(text)
@@ -264,24 +273,14 @@ local function ToggleSettings()
     btnAdvanced.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
     local btnClose = CreateFooterButton(f, CLOSE, "BOTTOMLEFT", f, "BOTTOMLEFT", FOOTER_SIDE_INSET, closeButtonWidth, function()
-        if ns._closeCatalogFrame then
-            ns._closeCatalogFrame()
-        elseif ns._catalogFrame then
-            ns._catalogFrame:Release()
-            ns._catalogFrame = nil
-        end
+        CloseCatalogIfOpen()
         frame:Release()
         ns._settingsFrame = nil
     end, FOOTER_BOTTOM_ROW_Y, FOOTER_CLOSE_BUTTON_HEIGHT)
     btnClose.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
     frame:SetCallback("OnClose", function(widget)
-        if ns._closeCatalogFrame then
-            ns._closeCatalogFrame()
-        elseif ns._catalogFrame then
-            ns._catalogFrame:Release()
-            ns._catalogFrame = nil
-        end
+        CloseCatalogIfOpen()
         dragBar:Hide()
         btnEM:Release()
         btnLock:Release()
