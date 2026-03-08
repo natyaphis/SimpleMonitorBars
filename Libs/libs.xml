@@ -4,7 +4,6 @@
     <Script file="LibStub\LibStub.lua"/>
     <Include file="CallbackHandler-1.0\CallbackHandler-1.0.xml"/>
     <Include file="AceDB-3.0\AceDB-3.0.xml"/>
-    <Include file="LibDualSpec-1.0\lib.xml"/>
     <Include file="LibSharedMedia-3.0\lib.xml"/>
     <Include file="AceGUI-3.0\AceGUI-3.0.xml"/>
 </Ui>

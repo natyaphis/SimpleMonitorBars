@@ -48,12 +48,17 @@ function MB.ConfigureStatusBar(bar)
     end
 end
 
-local CDM_VIEWERS = {
-    "BuffIconCooldownViewer",
-    "BuffBarCooldownViewer",
-    "EssentialCooldownViewer",
-    "UtilityCooldownViewer",
+local VIEWER_SOURCES = {
+    { name = "BuffIconCooldownViewer", aura = true },
+    { name = "BuffBarCooldownViewer", aura = true },
+    { name = "EssentialCooldownViewer", aura = false },
+    { name = "UtilityCooldownViewer", aura = false },
 }
+
+local CDM_VIEWERS = {}
+for i = 1, #VIEWER_SOURCES do
+    CDM_VIEWERS[i] = VIEWER_SOURCES[i].name
+end
 MB.CDM_VIEWERS = CDM_VIEWERS
 
 local function GetCooldownIDFromFrame(frame)
@@ -95,57 +100,109 @@ local function MapSpellInfo(info, cdID, forceOverwrite)
     end
 end
 
+local function IterateViewerFrames(viewer, visit)
+    if not viewer or not visit then
+        return
+    end
+
+    if viewer.itemFramePool then
+        for frame in viewer.itemFramePool:EnumerateActive() do
+            visit(frame)
+        end
+        return
+    end
+
+    for _, child in ipairs({ viewer:GetChildren() }) do
+        visit(child)
+    end
+end
+
+local function IterateViewerSources(visit)
+    for i = 1, #VIEWER_SOURCES do
+        local source = VIEWER_SOURCES[i]
+        local viewer = _G[source.name]
+        if viewer then
+            visit(viewer, source)
+        end
+    end
+end
+
+local function ResetViewerCaches()
+    wipe(spellToCooldownID)
+    wipe(cooldownIDToFrame)
+end
+
+local function RememberViewerFrame(frame, isAuraViewer)
+    local cdID = GetCooldownIDFromFrame(frame)
+    if not cdID then
+        return
+    end
+
+    cooldownIDToFrame[cdID] = frame
+    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo and C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+    MapSpellInfo(info, cdID, isAuraViewer)
+end
+
+local function SeedCooldownCatalogMappings()
+    if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet) then
+        return
+    end
+
+    for _, categoryID in ipairs({ 2, 3 }) do
+        local ids = C_CooldownViewer.GetCooldownViewerCategorySet(categoryID, true)
+        if ids then
+            for _, cdID in ipairs(ids) do
+                local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+                MapSpellInfo(info, cdID, true)
+            end
+        end
+    end
+end
+
+local function RefreshViewerCaches()
+    ResetViewerCaches()
+    SeedCooldownCatalogMappings()
+
+    IterateViewerSources(function(viewer, source)
+        IterateViewerFrames(viewer, function(frame)
+            RememberViewerFrame(frame, source.aura)
+        end)
+    end)
+end
+
+local function BuildCatalogEntry(frame, source, seen)
+    local cdID = GetCooldownIDFromFrame(frame)
+    if not cdID then
+        return nil
+    end
+
+    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo and C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+    local spellID = ResolveSpellID(info)
+    if not spellID or spellID <= 0 or seen[spellID] then
+        return nil
+    end
+
+    local name = C_Spell.GetSpellName(spellID)
+    if not name then
+        return nil
+    end
+
+    seen[spellID] = true
+    return {
+        spellID = spellID,
+        name = name,
+        icon = C_Spell.GetSpellTexture(spellID),
+        unit = frame.auraDataUnit or "player",
+        isAura = source.aura,
+    }
+end
+
 function MB:ScanCDMViewers()
     if InCombatLockdown() then return end
 
-    -- Rebuild caches from the latest viewer state on each scan.
-    wipe(spellToCooldownID)
-    wipe(cooldownIDToFrame)
+    RefreshViewerCaches()
 
-    if C_CooldownViewer.GetCooldownViewerCategorySet then
-        for _, cat in ipairs({ 2, 3 }) do
-            local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
-            if ids then
-                for _, cdID in ipairs(ids) do
-                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    MapSpellInfo(info, cdID, true)
-                end
-            end
-        end
-    end
-
-    for _, viewerName in ipairs(CDM_VIEWERS) do
-        local viewer = _G[viewerName]
-        if viewer then
-            local isAuraViewer = (viewerName == "BuffIconCooldownViewer" or viewerName == "BuffBarCooldownViewer")
-
-
-
-            if viewer.itemFramePool then
-                for frame in viewer.itemFramePool:EnumerateActive() do
-                    local cdID = GetCooldownIDFromFrame(frame)
-                    if cdID then
-                        cooldownIDToFrame[cdID] = frame
-                        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                        MapSpellInfo(info, cdID, isAuraViewer)
-                    end
-                end
-            else
-                for _, child in ipairs({ viewer:GetChildren() }) do
-                    local cdID = GetCooldownIDFromFrame(child)
-                    if cdID then
-                        cooldownIDToFrame[cdID] = child
-                        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                        MapSpellInfo(info, cdID, isAuraViewer)
-                    end
-                end
-            end
-        end
-    end
-
-    -- Allow Bars.lua to post-process viewer state after a scan.
     self:PostScanHook()
-
     if self.RebuildCDMSuppressedSet then
         self:RebuildCDMSuppressedSet()
     end
@@ -153,77 +210,104 @@ end
 
 function MB.FindCDMFrame(cooldownID)
     if not cooldownID then return nil end
-    local cached = cooldownIDToFrame[cooldownID]
-    if cached then return cached end
 
-    for _, viewerName in ipairs(CDM_VIEWERS) do
-        local viewer = _G[viewerName]
-        if viewer then
-            if viewer.itemFramePool then
-                for frame in viewer.itemFramePool:EnumerateActive() do
-                    local cdID = GetCooldownIDFromFrame(frame)
-                    if cdID == cooldownID then
-                        cooldownIDToFrame[cdID] = frame
-                        return frame
-                    end
-                end
-            else
-                for _, child in ipairs({ viewer:GetChildren() }) do
-                    local cdID = GetCooldownIDFromFrame(child)
-                    if cdID == cooldownID then
-                        cooldownIDToFrame[cdID] = child
-                        return child
+    local cached = cooldownIDToFrame[cooldownID]
+    if cached then
+        return cached
+    end
+
+    IterateViewerSources(function(viewer)
+        if cached then
+            return
+        end
+
+        IterateViewerFrames(viewer, function(frame)
+            if cached then
+                return
+            end
+
+            local frameCooldownID = GetCooldownIDFromFrame(frame)
+            if frameCooldownID == cooldownID then
+                cooldownIDToFrame[frameCooldownID] = frame
+                cached = frame
+            end
+        end)
+    end)
+
+    return cached
+end
+
+function MB.FindCooldownIDBySpellID(spellID)
+    if not spellID or spellID <= 0 then
+        return nil
+    end
+
+    local cached = spellToCooldownID[spellID]
+    if cached then
+        return cached
+    end
+
+    local foundCooldownID
+    IterateViewerSources(function(viewer)
+        if foundCooldownID then
+            return
+        end
+
+        IterateViewerFrames(viewer, function(frame)
+            if foundCooldownID then
+                return
+            end
+
+            local cdID = GetCooldownIDFromFrame(frame)
+            if not cdID then
+                return
+            end
+
+            local info = C_CooldownViewer.GetCooldownViewerCooldownInfo and C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+            if not info then
+                return
+            end
+
+            local resolvedSpellID = ResolveSpellID(info)
+            if resolvedSpellID == spellID or info.spellID == spellID then
+                foundCooldownID = cdID
+            elseif info.linkedSpellIDs then
+                for _, linkedSpellID in ipairs(info.linkedSpellIDs) do
+                    if linkedSpellID == spellID then
+                        foundCooldownID = cdID
+                        break
                     end
                 end
             end
-        end
-    end
-    return nil
+
+            if foundCooldownID then
+                spellToCooldownID[spellID] = foundCooldownID
+                cooldownIDToFrame[foundCooldownID] = frame
+            end
+        end)
+    end)
+
+    return foundCooldownID
 end
 
 function MB:GetSpellCatalog()
-    -- Build user-facing catalog entries from currently visible viewer items.
     local cooldowns, auras = {}, {}
     local seen = {}
 
-    local AURA_VIEWERS = { BuffIconCooldownViewer = true, BuffBarCooldownViewer = true }
+    IterateViewerSources(function(viewer, source)
+        IterateViewerFrames(viewer, function(frame)
+            local entry = BuildCatalogEntry(frame, source, seen)
+            if not entry then
+                return
+            end
 
-    for _, viewerName in ipairs(CDM_VIEWERS) do
-        local viewer = _G[viewerName]
-        if viewer then
-            local isAura = AURA_VIEWERS[viewerName]
-            local function processFrame(child)
-                local cdID = GetCooldownIDFromFrame(child)
-                if cdID then
-                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    local spellID = ResolveSpellID(info)
-                    if spellID and spellID > 0 and not seen[spellID] then
-                        seen[spellID] = true
-                        local name = C_Spell.GetSpellName(spellID)
-                        local icon = C_Spell.GetSpellTexture(spellID)
-                        if name then
-                            local unit = child.auraDataUnit or "player"
-                            local entry = { spellID = spellID, name = name, icon = icon, unit = unit }
-                            if isAura then
-                                auras[#auras + 1] = entry
-                            else
-                                cooldowns[#cooldowns + 1] = entry
-                            end
-                        end
-                    end
-                end
-            end
-            if viewer.itemFramePool then
-                for frame in viewer.itemFramePool:EnumerateActive() do
-                    processFrame(frame)
-                end
+            if entry.isAura then
+                auras[#auras + 1] = entry
             else
-                for _, child in ipairs({ viewer:GetChildren() }) do
-                    processFrame(child)
-                end
+                cooldowns[#cooldowns + 1] = entry
             end
-        end
-    end
+        end)
+    end)
 
     table.sort(cooldowns, function(a, b) return a.name < b.name end)
     table.sort(auras, function(a, b) return a.name < b.name end)

@@ -21,23 +21,6 @@ local function GetProfileList(db, excludeCurrent)
     return profiles, order
 end
 
-local function GetSpecNames()
-    local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
-    local names = {}
-    if isRetail then
-        local _, classId = UnitClassBase("player")
-        local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classId)
-        for i = 1, numSpecs do
-            local _, name = GetSpecializationInfoForClassID(classId, i)
-            names[i] = name
-        end
-    else
-        names[1] = TALENT_SPEC_PRIMARY or "Spec 1"
-        names[2] = TALENT_SPEC_SECONDARY or "Spec 2"
-    end
-    return names
-end
-
 local function RegisterProfileLayouts(AceGUI)
     if profileListLayoutRegistered or not AceGUI then
         return
@@ -90,7 +73,6 @@ function ns.BuildProfilesTab(scroll)
     local AceGUI = LibStub("AceGUI-3.0")
     RegisterProfileLayouts(AceGUI)
     local db = ns.acedb
-    local LibDualSpec = LibStub("LibDualSpec-1.0", true)
 
     local content = AceGUI:Create("SimpleGroup")
     content:SetFullWidth(true)
@@ -110,16 +92,11 @@ function ns.BuildProfilesTab(scroll)
     content:AddChild(currentLabel)
 
     local profileItems, profileOrder = GetProfileList(db)
-    local isDualSpecActive = LibDualSpec and db.IsDualSpecEnabled and db:IsDualSpecEnabled()
-
     local chooseDD = AceGUI:Create("Dropdown")
     chooseDD:SetLabel(L.profileChooseDesc)
     chooseDD:SetList(profileItems, profileOrder)
     chooseDD:SetValue(db:GetCurrentProfile())
     chooseDD:SetFullWidth(true)
-    if isDualSpecActive then
-        chooseDD:SetDisabled(true)
-    end
     chooseDD:SetCallback("OnValueChanged", function(_, _, val)
         db:SetProfile(val)
         print("|cff00ccff[SimpleMonitorBars]|r " .. format(L.profileLoaded, val))
@@ -141,11 +118,7 @@ function ns.BuildProfilesTab(scroll)
     newBox:SetCallback("OnEnterPressed", function(_, _, val)
         val = val and val:match("^%s*(.-)%s*$")
         if not val or val == "" then return end
-        if LibDualSpec and db.IsDualSpecEnabled and db:IsDualSpecEnabled() then
-            db:SetDualSpecProfile(val)
-        else
-            db:SetProfile(val)
-        end
+        db:SetProfile(val)
         print("|cff00ccff[SimpleMonitorBars]|r " .. format(L.profileCreated, val))
         RefreshTab()
     end)
@@ -207,54 +180,6 @@ function ns.BuildProfilesTab(scroll)
             RefreshTab()
         end)
         deleteGroup:AddChild(delBtn)
-    end
-
-    if LibDualSpec and db.IsDualSpecEnabled then
-        UI.AddHeading(content, L.specProfiles)
-
-        local specToggle = AceGUI:Create("CheckBox")
-        specToggle:SetLabel("|cffffd200" .. L.specProfileEnable .. "|r")
-        specToggle.text:SetFontObject(GameFontNormal)
-        specToggle:SetValue(db:IsDualSpecEnabled())
-        specToggle:SetFullWidth(true)
-        content:AddChild(specToggle)
-
-        local specGroup = AceGUI:Create("SimpleGroup")
-        specGroup:SetFullWidth(true)
-        specGroup:SetLayout("Flow")
-        content:AddChild(specGroup)
-
-        local function RebuildSpecOptions()
-            specGroup:ReleaseChildren()
-            local enabled = db:IsDualSpecEnabled()
-            chooseDD:SetDisabled(enabled)
-
-            local specNames = GetSpecNames()
-            local currentSpec = (GetSpecialization and GetSpecialization()) or 0
-            local allProfiles, allOrder = GetProfileList(db)
-
-            for i, specName in ipairs(specNames) do
-                local label = (i == currentSpec) and format(L.specProfileCurrent, specName) or specName
-
-                local dd = AceGUI:Create("Dropdown")
-                dd:SetLabel(label)
-                dd:SetList(allProfiles, allOrder)
-                dd:SetValue(db:GetDualSpecProfile(i))
-                dd:SetFullWidth(true)
-                dd:SetDisabled(not enabled)
-                dd:SetCallback("OnValueChanged", function(_, _, val)
-                    db:SetDualSpecProfile(val, i)
-                end)
-                specGroup:AddChild(dd)
-            end
-        end
-
-        specToggle:SetCallback("OnValueChanged", function(_, _, val)
-            db:SetDualSpecEnabled(val)
-            RebuildSpecOptions()
-        end)
-
-        RebuildSpecOptions()
     end
 
     UI.AddHeading(content, L.importExport)

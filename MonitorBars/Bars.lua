@@ -20,11 +20,9 @@ local ResolveFontPath    = MB.ResolveFontPath
 local ConfigureStatusBar = MB.ConfigureStatusBar
 local HasAuraInstanceID  = MB.HasAuraInstanceID
 local FindCDMFrame       = MB.FindCDMFrame
-local GetCooldownIDFromFrame = MB.GetCooldownIDFromFrame
-local ResolveSpellID = MB.ResolveSpellID
+local FindCooldownIDBySpellID = MB.FindCooldownIDBySpellID
 local spellToCooldownID  = MB._spellToCooldownID
 local PLAYER_CLASS_TAG   = select(2, UnitClass("player"))
-local CDM_VIEWERS = MB.CDM_VIEWERS or {}
 
 local activeFrames = {}
 local elapsed = 0
@@ -34,6 +32,9 @@ local frameTick = 0
 
 -- Forward declarations used across setup and update stages.
 local ShouldBarBeVisible
+local AnchorToJustifyH
+local ANCHOR_POINT
+local ANCHOR_REL
 
 
 -- Segment fill velocity used by stack smoothing animation.
@@ -105,16 +106,134 @@ local function GetRingTextureByThickness(thickness)
     return RING_TEXTURE_MAP[40]
 end
 
+local function NormalizeMaskAndBorderStyle(styleName)
+    if styleName == "1px" then
+        return "1"
+    elseif styleName == "Thin" then
+        return "2"
+    elseif styleName == "Medium" then
+        return "3"
+    elseif styleName == "Thick" then
+        return "5"
+    elseif styleName == "None" then
+        return "0"
+    end
+    return styleName or "1"
+end
+
+local function ResolveCenterOffset(centerX, centerY, parentFrame, frameScale)
+    local parentScale = parentFrame:GetEffectiveScale()
+    local parentCenterX, parentCenterY = parentFrame:GetCenter()
+
+    local worldX = centerX * frameScale
+    local worldY = centerY * frameScale
+    local parentWorldX = parentCenterX * parentScale
+    local parentWorldY = parentCenterY * parentScale
+
+    local offsetX = (worldX - parentWorldX) / frameScale
+    local offsetY = (worldY - parentWorldY) / frameScale
+    return MB.getNearestPixel(offsetX, frameScale), MB.getNearestPixel(offsetY, frameScale)
+end
+
+local function SetFrameCenterOffset(frame, parentFrame, offsetX, offsetY)
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", parentFrame, "CENTER", offsetX, offsetY)
+end
+
+local function ConfigurePrimaryText(frame, cfg)
+    local fontPath = ResolveFontPath(cfg.fontName)
+    local anchor = cfg.textAnchor or cfg.textAlign or "RIGHT"
+    local txOff = cfg.textOffsetX or -4
+    local tyOff = cfg.textOffsetY or 0
+
+    frame._text:SetFont(fontPath, cfg.fontSize or 12, cfg.outline or "OUTLINE")
+    frame._text:ClearAllPoints()
+    frame._text:SetPoint(ANCHOR_POINT[anchor] or anchor, frame._textHolder, ANCHOR_REL[anchor] or anchor, txOff, tyOff)
+    frame._text:SetTextColor(1, 1, 1, 1)
+    frame._text:SetJustifyH(AnchorToJustifyH(anchor))
+end
+
+local function AttachDragHandlers(frame, barCfg)
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function(self)
+        if ns.db.monitorBars.locked then return end
+
+        self:SetToplevel(true)
+        local frameScale = self:GetEffectiveScale()
+        local cursorX, cursorY = GetCursorPosition()
+        cursorX, cursorY = cursorX / frameScale, cursorY / frameScale
+
+        local centerX, centerY = self:GetCenter()
+        local dragOffsetX = centerX - cursorX
+        local dragOffsetY = centerY - cursorY
+
+        self:SetScript("OnUpdate", function(movingFrame)
+            local nextCursorX, nextCursorY = GetCursorPosition()
+            nextCursorX, nextCursorY = nextCursorX / frameScale, nextCursorY / frameScale
+
+            local nextCenterX = nextCursorX + dragOffsetX
+            local nextCenterY = nextCursorY + dragOffsetY
+            local setX, setY = ResolveCenterOffset(nextCenterX, nextCenterY, UIParent, frameScale)
+            SetFrameCenterOffset(movingFrame, UIParent, setX, setY)
+        end)
+    end)
+
+    frame:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+
+        local centerX, centerY = self:GetCenter()
+        local frameScale = self:GetEffectiveScale()
+        local setX, setY = ResolveCenterOffset(centerX, centerY, UIParent, frameScale)
+
+        barCfg.posX = setX
+        barCfg.posY = setY
+        SetFrameCenterOffset(self, UIParent, setX, setY)
+    end)
+end
+
+local function AttachWheelHandlers(frame, barCfg)
+    frame:SetScript("OnMouseWheel", function(self, delta)
+        if ns.db.monitorBars.locked then return end
+        local effScale = self:GetEffectiveScale()
+        local step = MB.getPixelPerfectScale(effScale)
+
+        if IsShiftKeyDown() then
+            barCfg.posX = MB.getNearestPixel((barCfg.posX or 0) + delta * step, effScale)
+        else
+            barCfg.posY = MB.getNearestPixel((barCfg.posY or 0) + delta * step, effScale)
+        end
+        SetFrameCenterOffset(self, UIParent, barCfg.posX, barCfg.posY)
+    end)
+end
+
+local function AttachTooltipHandlers(frame, barCfg)
+    frame:SetScript("OnEnter", function(self)
+        if ns.db.monitorBars.locked then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+        local name = barCfg.spellName or ""
+        if name ~= "" then
+            GameTooltip:AddLine(name, 1, 1, 1)
+        end
+        GameTooltip:AddLine(ns.L.mbNudgeHint or "", 0.6, 0.8, 1)
+        GameTooltip:Show()
+    end)
+    frame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+end
 
 
 
 
-local hookedFrames = {}
-local frameToBarIDs = {}
+
+local viewerSignalRegistry = {}
+local watcherIDsByFrame = {}
 local UpdateStackBar
 
 local function OnCDMFrameChanged(frame)
-    local ids = frameToBarIDs[frame]
+    local ids = watcherIDsByFrame[frame]
     if not ids then return end
     for _, id in ipairs(ids) do
         local f = activeFrames[id]
@@ -128,12 +247,12 @@ local function OnCDMFrameChanged(frame)
     end
 end
 
-local function HookCDMFrame(frame, barID)
+local function RegisterViewerSignals(frame, barID)
     -- Hook viewer frame refresh paths once and track owning bar IDs.
     if not frame then return end
-    if not hookedFrames[frame] then
-        hookedFrames[frame] = { barIDs = {} }
-        frameToBarIDs[frame] = {}
+    if not viewerSignalRegistry[frame] then
+        viewerSignalRegistry[frame] = { barIDs = {} }
+        watcherIDsByFrame[frame] = {}
         if frame.RefreshData then
             hooksecurefunc(frame, "RefreshData", OnCDMFrameChanged)
         end
@@ -144,20 +263,20 @@ local function HookCDMFrame(frame, barID)
             hooksecurefunc(frame, "SetAuraInstanceInfo", OnCDMFrameChanged)
         end
     end
-    if not hookedFrames[frame].barIDs[barID] then
-        hookedFrames[frame].barIDs[barID] = true
-        table.insert(frameToBarIDs[frame], barID)
+    if not viewerSignalRegistry[frame].barIDs[barID] then
+        viewerSignalRegistry[frame].barIDs[barID] = true
+        table.insert(watcherIDsByFrame[frame], barID)
     end
 end
 
-local function ClearAllHookRegistrations()
-    for frame in pairs(hookedFrames) do
-        hookedFrames[frame].barIDs = {}
-        frameToBarIDs[frame] = {}
+local function ResetViewerSignals()
+    for frame in pairs(viewerSignalRegistry) do
+        viewerSignalRegistry[frame].barIDs = {}
+        watcherIDsByFrame[frame] = {}
     end
 end
 
-local function AutoHookStackBars()
+local function RebindStackWatchers()
     for _, f in pairs(activeFrames) do
         local cfg = f._cfg
         if cfg and cfg.barType == "stack" and cfg.spellID > 0 then
@@ -165,7 +284,7 @@ local function AutoHookStackBars()
             if cdID then
                 local cdmFrame = FindCDMFrame(cdID)
                 if cdmFrame then
-                    HookCDMFrame(cdmFrame, f._barID)
+                    RegisterViewerSignals(cdmFrame, f._barID)
                     f._cdmFrame = cdmFrame
                 end
             end
@@ -174,8 +293,8 @@ local function AutoHookStackBars()
 end
 
 function MB:PostScanHook()
-    ClearAllHookRegistrations()
-    AutoHookStackBars()
+    ResetViewerSignals()
+    RebindStackWatchers()
 end
 
 
@@ -234,18 +353,7 @@ end
 
 
 function MB.ApplyMaskAndBorderSettings(barFrame, cfg)
-    local styleName = cfg.maskAndBorderStyle or "1"
-    if styleName == "1px" then
-        styleName = "1"
-    elseif styleName == "Thin" then
-        styleName = "2"
-    elseif styleName == "Medium" then
-        styleName = "3"
-    elseif styleName == "Thick" then
-        styleName = "5"
-    elseif styleName == "None" then
-        styleName = "0"
-    end
+    local styleName = NormalizeMaskAndBorderStyle(cfg.maskAndBorderStyle)
     local style = MB.MASK_AND_BORDER_STYLES[styleName] or MB.MASK_AND_BORDER_STYLES["1"]
     
     local width, height = barFrame:GetSize()
@@ -446,7 +554,7 @@ end
 
 
 
-local function AnchorToJustifyH(anchor)
+AnchorToJustifyH = function(anchor)
     if anchor == "LEFT" or anchor == "TOPLEFT" or anchor == "BOTTOMLEFT" then
         return "LEFT"
     elseif anchor == "CENTER" or anchor == "TOP" or anchor == "BOTTOM" then
@@ -460,12 +568,12 @@ end
 
 
 
-local ANCHOR_POINT = {
+ANCHOR_POINT = {
     TOPLEFT     = "BOTTOMLEFT",  TOP     = "BOTTOM",  TOPRIGHT     = "BOTTOMRIGHT",
     LEFT        = "LEFT",        CENTER  = "CENTER",  RIGHT        = "RIGHT",
     BOTTOMLEFT  = "TOPLEFT",     BOTTOM  = "TOP",     BOTTOMRIGHT  = "TOPRIGHT",
 }
-local ANCHOR_REL = {
+ANCHOR_REL = {
     TOPLEFT     = "TOPLEFT",     TOP     = "TOP",     TOPRIGHT     = "TOPRIGHT",
     LEFT        = "LEFT",        CENTER  = "CENTER",  RIGHT        = "RIGHT",
     BOTTOMLEFT  = "BOTTOMLEFT",  BOTTOM  = "BOTTOM",  BOTTOMRIGHT  = "BOTTOMRIGHT",
@@ -531,123 +639,10 @@ function MB:CreateBarFrame(barCfg)
     f._textHolder:SetFrameLevel(f:GetFrameLevel() + 6)
 
     f._text = f._textHolder:CreateFontString(nil, "OVERLAY")
-    local fontPath = ResolveFontPath(barCfg.fontName)
-    f._text:SetFont(fontPath, barCfg.fontSize or 12, barCfg.outline or "OUTLINE")
-    local anchor = barCfg.textAnchor or barCfg.textAlign or "RIGHT"
-    local txOff = barCfg.textOffsetX or -4
-    local tyOff = barCfg.textOffsetY or 0
-    f._text:SetPoint(ANCHOR_POINT[anchor] or anchor, f._textHolder, ANCHOR_REL[anchor] or anchor, txOff, tyOff)
-    f._text:SetTextColor(1, 1, 1, 1)
-    f._text:SetJustifyH(AnchorToJustifyH(anchor))
-
-    f:EnableMouse(true)
-    f:SetMovable(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(self)
-        if ns.db.monitorBars.locked then return end
-        
-        self:SetToplevel(true)
-        local effScale = self:GetEffectiveScale()
-        
-        local sX, sY = GetCursorPosition()
-        sX, sY = sX / effScale, sY / effScale
-        
-        local centerX, centerY = self:GetCenter()
-        local xOffset = centerX - sX
-        local yOffset = centerY - sY
-        
-        self:SetScript("OnUpdate", function(s)
-            local currX, currY = GetCursorPosition()
-            currX, currY = currX / effScale, currY / effScale
-            
-            local newCenterX = currX + xOffset
-            local newCenterY = currY + yOffset
-            
-            local p = UIParent
-            local pScale = p:GetEffectiveScale()
-            local uCenterX, uCenterY = p:GetCenter()
-            
-            local worldX = newCenterX * effScale
-            local worldY = newCenterY * effScale
-            local pWorldX = uCenterX * pScale
-            local pWorldY = uCenterY * pScale
-            
-            local worldDiffX = worldX - pWorldX
-            local worldDiffY = worldY - pWorldY
-            
-            local valX = worldDiffX / pScale 
-            local valY = worldDiffY / pScale
-            
-            local setX = valX * (pScale / effScale)
-            local setY = valY * (pScale / effScale)
-            
-            setX = MB.getNearestPixel(setX, effScale)
-            setY = MB.getNearestPixel(setY, effScale)
-            
-            s:ClearAllPoints()
-            s:SetPoint("CENTER", p, "CENTER", setX, setY)
-        end)
-    end)
-    f:SetScript("OnDragStop", function(self)
-        self:SetScript("OnUpdate", nil)
-        
-        local cx, cy = self:GetCenter()
-        local p = UIParent
-        local pScale = p:GetEffectiveScale()
-        local effScale = self:GetEffectiveScale()
-        
-        local uCenterX, uCenterY = p:GetCenter()
-        local worldX = cx * effScale
-        local worldY = cy * effScale
-        local pWorldX = uCenterX * pScale
-        local pWorldY = uCenterY * pScale
-        
-        local worldDiffX = worldX - pWorldX
-        local worldDiffY = worldY - pWorldY
-        
-        local valX = worldDiffX / pScale
-        local valY = worldDiffY / pScale
-        
-        local setX = valX * (pScale / effScale)
-        local setY = valY * (pScale / effScale)
-        
-        setX = MB.getNearestPixel(setX, effScale)
-        setY = MB.getNearestPixel(setY, effScale)
-        
-        barCfg.posX = setX
-        barCfg.posY = setY
-        
-        self:ClearAllPoints()
-        self:SetPoint("CENTER", p, "CENTER", setX, setY)
-    end)
-
-    f:SetScript("OnMouseWheel", function(self, delta)
-        if ns.db.monitorBars.locked then return end
-        local effScale = self:GetEffectiveScale()
-        local pp = MB.getPixelPerfectScale(effScale)
-
-        if IsShiftKeyDown() then
-            barCfg.posX = MB.getNearestPixel((barCfg.posX or 0) + delta * pp, effScale)
-        else
-            barCfg.posY = MB.getNearestPixel((barCfg.posY or 0) + delta * pp, effScale)
-        end
-        self:ClearAllPoints()
-        self:SetPoint("CENTER", UIParent, "CENTER", barCfg.posX, barCfg.posY)
-    end)
-
-    f:SetScript("OnEnter", function(self)
-        if ns.db.monitorBars.locked then return end
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
-        local name = barCfg.spellName or ""
-        if name ~= "" then
-            GameTooltip:AddLine(name, 1, 1, 1)
-        end
-        GameTooltip:AddLine(ns.L.mbNudgeHint or "", 0.6, 0.8, 1)
-        GameTooltip:Show()
-    end)
-    f:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    ConfigurePrimaryText(f, barCfg)
+    AttachDragHandlers(f, barCfg)
+    AttachWheelHandlers(f, barCfg)
+    AttachTooltipHandlers(f, barCfg)
 
     local locked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
     f:EnableMouseWheel(not locked)
@@ -917,53 +912,11 @@ local function UpdateBarActiveState(barFrame, isActive)
     end
 end
 
-local function ResolveCooldownIDFromActiveFrames(spellID)
-    if not spellID or spellID <= 0 then return nil end
-
-    for _, viewerName in ipairs(CDM_VIEWERS) do
-        local viewer = _G[viewerName]
-        if viewer then
-            local function MatchFrame(frame)
-                local cdID = GetCooldownIDFromFrame and GetCooldownIDFromFrame(frame)
-                if not cdID then return nil end
-                local info = C_CooldownViewer.GetCooldownViewerCooldownInfo and C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                if not info then return nil end
-
-                local sid = ResolveSpellID and ResolveSpellID(info)
-                if sid == spellID or info.spellID == spellID then
-                    return cdID
-                end
-                if info.linkedSpellIDs then
-                    for _, lid in ipairs(info.linkedSpellIDs) do
-                        if lid == spellID then
-                            return cdID
-                        end
-                    end
-                end
-                return nil
-            end
-
-            if viewer.itemFramePool then
-                for frame in viewer.itemFramePool:EnumerateActive() do
-                    local found = MatchFrame(frame)
-                    if found then
-                        spellToCooldownID[spellID] = found
-                        return found
-                    end
-                end
-            else
-                for _, child in ipairs({ viewer:GetChildren() }) do
-                    local found = MatchFrame(child)
-                    if found then
-                        spellToCooldownID[spellID] = found
-                        return found
-                    end
-                end
-            end
-        end
+local function ResolveTrackedCooldownID(spellID)
+    if not FindCooldownIDBySpellID then
+        return nil
     end
-
-    return nil
+    return FindCooldownIDBySpellID(spellID)
 end
 
 local function GetStackCountFromAuraOrFrame(auraData, cdmFrame)
@@ -1063,14 +1016,14 @@ UpdateStackBar = function(barFrame)
 
     local cooldownID = spellToCooldownID[spellID]
     if not isIciclesPlayer and not cooldownID and not auraActive then
-        cooldownID = ResolveCooldownIDFromActiveFrames(spellID)
+        cooldownID = ResolveTrackedCooldownID(spellID)
     end
     barFrame._cooldownID = cooldownID
 
     if not isIciclesPlayer and cooldownID then
         local cdmFrame = FindCDMFrame(cooldownID)
         if cdmFrame then
-            HookCDMFrame(cdmFrame, barFrame._barID)
+            RegisterViewerSignals(cdmFrame, barFrame._barID)
             barFrame._cdmFrame = cdmFrame
 
             if HasAuraInstanceID(cdmFrame.auraInstanceID) then
@@ -1451,7 +1404,7 @@ local function UpdateDurationBar(barFrame)
     if cooldownID then
         cdmFrame = FindCDMFrame(cooldownID)
         if cdmFrame then
-            HookCDMFrame(cdmFrame, barFrame._barID)
+            RegisterViewerSignals(cdmFrame, barFrame._barID)
             barFrame._cdmFrame = cdmFrame
 
             if HasAuraInstanceID(cdmFrame.auraInstanceID) then

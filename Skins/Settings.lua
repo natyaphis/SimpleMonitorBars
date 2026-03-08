@@ -7,10 +7,13 @@ local AceGUI
 local MB = ns.MonitorBars
 
 local FOOTER_BUTTON_HEIGHT = 24
+local FOOTER_CLOSE_BUTTON_HEIGHT = 28
 local FOOTER_BUTTON_GAP = 8
 local FOOTER_SIDE_INSET = 14
-local TOP_TAB_WIDTH_SCALE = 1.2
-local TOP_TAB_OVERLAP = -14
+local FOOTER_TOP_ROW_Y = 44
+local FOOTER_BOTTOM_ROW_Y = 10
+local TOP_TAB_SIDE_INSET = 10
+local TOP_TAB_GAP = -14
 
 local function GetAddonVersion()
     if C_AddOns and C_AddOns.GetAddOnMetadata then
@@ -82,19 +85,13 @@ local function AdjustSettingsTabs(tabGroup)
     end
 
     local tabs = {}
-    local totalWidth = 0
     local hastitle = (tabGroup.titletext:GetText() and tabGroup.titletext:GetText() ~= "")
     local yOffset = -((hastitle and 14 or 7))
 
     for i = 1, count do
         local tab = tabGroup.tabs[i]
         if tab and tab:IsShown() then
-            local baseWidth = tab._smbBaseWidth or (tab:GetWidth() or 0)
-            tab._smbBaseWidth = baseWidth
-            local scaledWidth = math.floor(baseWidth * TOP_TAB_WIDTH_SCALE + 0.5)
-            tab:SetWidth(scaledWidth)
             tabs[#tabs + 1] = tab
-            totalWidth = totalWidth + scaledWidth
         end
     end
 
@@ -102,15 +99,22 @@ local function AdjustSettingsTabs(tabGroup)
         return
     end
 
-    local contentWidth = totalWidth + (TOP_TAB_OVERLAP * (#tabs - 1))
-    local startX = math.max(0, (availableWidth - contentWidth) / 2)
+    local usableWidth = math.max(1, availableWidth - (TOP_TAB_SIDE_INSET * 2))
+    local tabWidth = math.floor((usableWidth - (TOP_TAB_GAP * (#tabs - 1))) / #tabs)
+    if tabWidth < 1 then
+        tabWidth = 1
+    end
+
+    local contentWidth = (tabWidth * #tabs) + (TOP_TAB_GAP * (#tabs - 1))
+    local startX = math.max(TOP_TAB_SIDE_INSET, math.floor((availableWidth - contentWidth) / 2))
 
     for i, tab in ipairs(tabs) do
         tab:ClearAllPoints()
+        tab:SetWidth(tabWidth)
         if i == 1 then
             tab:SetPoint("TOPLEFT", tabGroup.frame, "TOPLEFT", startX, yOffset)
         else
-            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", TOP_TAB_OVERLAP, 0)
+            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", TOP_TAB_GAP, 0)
         end
     end
 end
@@ -128,14 +132,14 @@ local function HideDefaultFooterControls(frame)
     end
 end
 
-local function CreateFooterButton(parent, text, anchorPoint, relativeTo, relativePoint, xOffset, width, onClick)
+local function CreateFooterButton(parent, text, anchorPoint, relativeTo, relativePoint, xOffset, width, onClick, yOffset, height)
     local btn = AceGUI:Create("Button")
     btn:SetText(text)
     btn:SetWidth(width)
-    btn:SetHeight(FOOTER_BUTTON_HEIGHT)
+    btn:SetHeight(height or FOOTER_BUTTON_HEIGHT)
     btn.frame:SetParent(parent)
     btn.frame:ClearAllPoints()
-    btn.frame:SetPoint(anchorPoint, relativeTo, relativePoint, xOffset, 15)
+    btn.frame:SetPoint(anchorPoint, relativeTo, relativePoint, xOffset, yOffset or 15)
     btn.frame:Show()
     btn:SetCallback("OnClick", onClick)
     return btn
@@ -150,8 +154,8 @@ local function ToggleSettings()
 
     local frame = AceGUI:Create("Frame")
     frame:SetTitle("SimpleMonitorBars by NatYaphis")
-    frame:SetWidth(450)
-    frame:SetHeight(512)
+    frame:SetWidth(400)
+    frame:SetHeight(600)
     frame:SetLayout("Fill")
     frame:EnableResize(false)
 
@@ -175,7 +179,7 @@ local function ToggleSettings()
 
     frame.content:ClearAllPoints()
     frame.content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -50)
-    frame.content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 56)
+    frame.content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 94)
 
     HideDefaultFooterControls(frame)
 
@@ -192,6 +196,7 @@ local function ToggleSettings()
 
     local footerWidth = f:GetWidth() - (FOOTER_SIDE_INSET * 2) - (FOOTER_BUTTON_GAP * 2)
     local buttonWidth = math.floor(footerWidth / 3)
+    local closeButtonWidth = f:GetWidth() - (FOOTER_SIDE_INSET * 2)
 
     local btnEM = CreateFooterButton(f, L.openEditMode, "BOTTOMLEFT", f, "BOTTOMLEFT", FOOTER_SIDE_INSET, buttonWidth, function()
         if InCombatLockdown() then
@@ -208,7 +213,7 @@ local function ToggleSettings()
             if emFrame.CanEnterEditMode and not emFrame:CanEnterEditMode() then return end
             if emFrame:IsShown() then HideUIPanel(emFrame) else ShowUIPanel(emFrame) end
         end
-    end)
+    end, FOOTER_TOP_ROW_Y)
     btnEM.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
     local btnLock
@@ -227,19 +232,42 @@ local function ToggleSettings()
         local locked = not (ns.db and ns.db.monitorBars and ns.db.monitorBars.locked)
         MB:SetLocked(locked)
         RefreshLockButtonText()
-    end)
+    end, FOOTER_TOP_ROW_Y)
     btnLock.frame:SetFrameLevel(f:GetFrameLevel() + 3)
     RefreshLockButtonText()
 
-    local btnClose = CreateFooterButton(f, CLOSE, "BOTTOMRIGHT", f, "BOTTOMRIGHT", -FOOTER_SIDE_INSET, buttonWidth, function()
+    local btnAdvanced = CreateFooterButton(f, L.openAdvancedCooldownSettings, "BOTTOMRIGHT", f, "BOTTOMRIGHT", -FOOTER_SIDE_INSET, buttonWidth, function()
+        if InCombatLockdown() then
+            print(L.cdmCombatLocked)
+            return
+        end
+        local emFrame = _G.EditModeManagerFrame
+        if emFrame and emFrame:IsShown() then
+            print(L.cdmEditModeLocked)
+            return
+        end
+        if CooldownViewerSettings and CooldownViewerSettings:IsShown() then
+            CooldownViewerSettings:Hide()
+            return
+        end
+        C_Timer.After(0.05, function()
+            if CooldownViewerSettings and CooldownViewerSettings.ShowUIPanel then
+                CooldownViewerSettings:ShowUIPanel(false)
+            end
+        end)
+    end, FOOTER_TOP_ROW_Y)
+    btnAdvanced.frame:SetFrameLevel(f:GetFrameLevel() + 3)
+
+    local btnClose = CreateFooterButton(f, CLOSE, "BOTTOMLEFT", f, "BOTTOMLEFT", FOOTER_SIDE_INSET, closeButtonWidth, function()
         frame:Hide()
-    end)
+    end, FOOTER_BOTTOM_ROW_Y, FOOTER_CLOSE_BUTTON_HEIGHT)
     btnClose.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
     frame:SetCallback("OnClose", function(widget)
         dragBar:Hide()
         btnEM:Release()
         btnLock:Release()
+        btnAdvanced:Release()
         btnClose:Release()
         widget:Release()
         ns._settingsFrame = nil

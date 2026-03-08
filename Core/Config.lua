@@ -3,7 +3,6 @@
 local _, ns = ...
 
 local AceDB3 = LibStub("AceDB-3.0")
-local LibDualSpec = LibStub("LibDualSpec-1.0", true)
 local DeepCopy = ns.DeepCopy
 local MigrateOldData = ns.MigrateOldData
 
@@ -33,10 +32,6 @@ function ns:InitDB()
         profile = ns.defaults,
         char    = { useSharedProfile = false },
     }, charKey)
-
-    if LibDualSpec then
-        LibDualSpec:EnhanceDatabase(db, "SimpleMonitorBars")
-    end
 
     ns.acedb = db
 
