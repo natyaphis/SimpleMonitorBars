@@ -141,8 +141,8 @@ end
 
 local function ConfigurePrimaryText(frame, cfg)
     local fontPath = ResolveFontPath(cfg.fontName)
-    local anchor = cfg.textAnchor or cfg.textAlign or "RIGHT"
-    local txOff = cfg.textOffsetX or -4
+    local anchor = cfg.textAnchor or cfg.textAlign or "CENTER"
+    local txOff = cfg.textOffsetX or 0
     local tyOff = cfg.textOffsetY or 0
 
     frame._text:SetFont(fontPath, cfg.fontSize or 12, cfg.outline or "OUTLINE")
@@ -150,6 +150,42 @@ local function ConfigurePrimaryText(frame, cfg)
     frame._text:SetPoint(ANCHOR_POINT[anchor] or anchor, frame._textHolder, ANCHOR_REL[anchor] or anchor, txOff, tyOff)
     frame._text:SetTextColor(1, 1, 1, 1)
     frame._text:SetJustifyH(AnchorToJustifyH(anchor))
+end
+
+local function ConfigureCountText(frame, cfg)
+    local fontPath = ResolveFontPath(cfg.countFontName or cfg.fontName)
+    local anchor = cfg.countTextAnchor or "LEFT"
+    local txOff = cfg.countTextOffsetX or 0
+    local tyOff = cfg.countTextOffsetY or 0
+
+    frame._countText:SetFont(fontPath, cfg.countFontSize or cfg.fontSize or 14, cfg.countOutline or cfg.outline or "OUTLINE")
+    frame._countText:ClearAllPoints()
+    frame._countText:SetPoint(ANCHOR_POINT[anchor] or anchor, frame._textHolder, ANCHOR_REL[anchor] or anchor, txOff, tyOff)
+    frame._countText:SetTextColor(1, 1, 1, 1)
+    frame._countText:SetJustifyH(AnchorToJustifyH(anchor))
+end
+
+local function SetCountText(barFrame, text)
+    local cfg = barFrame and barFrame._cfg
+    if not cfg or cfg.showCountText ~= true or not barFrame._countText then
+        return
+    end
+    barFrame._countText:SetText(text or "")
+end
+
+local function ClearCountText(barFrame)
+    if barFrame and barFrame._countText then
+        barFrame._countText:SetText("")
+    end
+end
+
+local function ExtractAuraCount(auraData)
+    if type(auraData) ~= "table" then return nil end
+    local count = auraData.applications or auraData.stacks or auraData.charges or auraData.count
+    if type(count) == "number" and count > 0 then
+        return count
+    end
+    return nil
 end
 
 local function AttachDragHandlers(frame, barCfg)
@@ -175,7 +211,14 @@ local function AttachDragHandlers(frame, barCfg)
             local nextCenterX = nextCursorX + dragOffsetX
             local nextCenterY = nextCursorY + dragOffsetY
             local setX, setY = ResolveCenterOffset(nextCenterX, nextCenterY, UIParent, frameScale)
+            local roundedX = MB.rounded(setX, 1)
+            local roundedY = MB.rounded(setY, 1)
+            barCfg.posX = roundedX
+            barCfg.posY = roundedY
             SetFrameCenterOffset(movingFrame, UIParent, setX, setY)
+            if type(barCfg._smbSyncPositionSliders) == "function" then
+                barCfg._smbSyncPositionSliders(roundedX, roundedY)
+            end
         end)
     end)
 
@@ -186,9 +229,12 @@ local function AttachDragHandlers(frame, barCfg)
         local frameScale = self:GetEffectiveScale()
         local setX, setY = ResolveCenterOffset(centerX, centerY, UIParent, frameScale)
 
-        barCfg.posX = setX
-        barCfg.posY = setY
-        SetFrameCenterOffset(self, UIParent, setX, setY)
+        barCfg.posX = MB.rounded(setX, 1)
+        barCfg.posY = MB.rounded(setY, 1)
+        SetFrameCenterOffset(self, UIParent, barCfg.posX, barCfg.posY)
+        if type(barCfg._smbSyncPositionSliders) == "function" then
+            barCfg._smbSyncPositionSliders(barCfg.posX, barCfg.posY)
+        end
     end)
 end
 
@@ -199,11 +245,14 @@ local function AttachWheelHandlers(frame, barCfg)
         local step = MB.getPixelPerfectScale(effScale)
 
         if IsShiftKeyDown() then
-            barCfg.posX = MB.getNearestPixel((barCfg.posX or 0) + delta * step, effScale)
+            barCfg.posX = MB.rounded(MB.getNearestPixel((barCfg.posX or 0) + delta * step, effScale), 1)
         else
-            barCfg.posY = MB.getNearestPixel((barCfg.posY or 0) + delta * step, effScale)
+            barCfg.posY = MB.rounded(MB.getNearestPixel((barCfg.posY or 0) + delta * step, effScale), 1)
         end
         SetFrameCenterOffset(self, UIParent, barCfg.posX, barCfg.posY)
+        if type(barCfg._smbSyncPositionSliders) == "function" then
+            barCfg._smbSyncPositionSliders(barCfg.posX, barCfg.posY)
+        end
     end)
 end
 
@@ -450,7 +499,9 @@ local function CreateSegments(barFrame, count, cfg)
     local totalW = container:GetWidth()
     local totalH = container:GetHeight()
     local gap = cfg.segmentGap ~= nil and cfg.segmentGap or SEGMENT_GAP
-    local borderSize = cfg.borderSize or 1
+    local styleName = NormalizeMaskAndBorderStyle(cfg.maskAndBorderStyle)
+    local style = MB.MASK_AND_BORDER_STYLES[styleName] or MB.MASK_AND_BORDER_STYLES["1"]
+    local borderSize = style.thickness or 0
     local perSegBorder = (cfg.borderStyle == "segment")
     local segW = (totalW - (count - 1) * gap) / count
     local barColor = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
@@ -639,6 +690,8 @@ function MB:CreateBarFrame(barCfg)
 
     f._text = f._textHolder:CreateFontString(nil, "OVERLAY")
     ConfigurePrimaryText(f, barCfg)
+    f._countText = f._textHolder:CreateFontString(nil, "OVERLAY")
+    ConfigureCountText(f, barCfg)
     AttachDragHandlers(f, barCfg)
     AttachWheelHandlers(f, barCfg)
     AttachTooltipHandlers(f, barCfg)
@@ -746,7 +799,7 @@ function MB:ApplyStyle(barFrame)
         local fontPath = ResolveFontPath(cfg.nameFontName or cfg.fontName)
         barFrame._nameText:SetFont(fontPath, cfg.nameFontSize or 14, cfg.nameOutline or cfg.outline or "OUTLINE")
         
-        local nAnchor = cfg.nameAnchor or "CENTER"
+        local nAnchor = cfg.nameAnchor or "RIGHT"
         local nX = cfg.nameOffsetX or 0
         local nY = cfg.nameOffsetY or 0
         
@@ -798,13 +851,18 @@ function MB:ApplyStyle(barFrame)
 
     local fontPath = ResolveFontPath(cfg.fontName)
     barFrame._text:SetFont(fontPath, cfg.fontSize or 14, cfg.outline or "OUTLINE")
-    barFrame._text:SetShown(cfg.showText ~= false)
-    local anchor = cfg.textAnchor or cfg.textAlign or "RIGHT"
+    barFrame._text:SetShown(cfg.barType ~= "stack" and cfg.showText ~= false)
+    local anchor = cfg.textAnchor or cfg.textAlign or "CENTER"
     barFrame._text:ClearAllPoints()
-    barFrame._text:SetPoint(ANCHOR_POINT[anchor] or anchor, barFrame._textHolder, ANCHOR_REL[anchor] or anchor, cfg.textOffsetX or -5, cfg.textOffsetY or 0)
+    barFrame._text:SetPoint(ANCHOR_POINT[anchor] or anchor, barFrame._textHolder, ANCHOR_REL[anchor] or anchor, cfg.textOffsetX or 0, cfg.textOffsetY or 0)
     barFrame._text:SetJustifyH(AnchorToJustifyH(anchor))
+    ConfigureCountText(barFrame, cfg)
+    barFrame._countText:SetShown(cfg.showCountText == true)
+    if cfg.showCountText ~= true then
+        barFrame._countText:SetText("")
+    end
 
-    if cfg.borderStyle ~= "segment" and not isRing then
+    if cfg.borderStyle == "whole" and not isRing then
         MB.ApplyMaskAndBorderSettings(barFrame, cfg)
     elseif barFrame._borderFrame then
         barFrame._borderFrame:Hide()
@@ -1174,8 +1232,13 @@ UpdateStackBar = function(barFrame)
         ApplySegmentColors(barFrame, stacks)
     end
 
-    if stacksResolved and cfg.showText ~= false and barFrame._text then
-        barFrame._text:SetText(tostring(stacks))
+    if type(stacks) == "number" then
+        SetCountText(barFrame, tostring(stacks))
+    else
+        ClearCountText(barFrame)
+    end
+    if barFrame._text then
+        barFrame._text:SetText("")
     end
 
     UpdateBarActiveState(barFrame, auraActive)
@@ -1271,6 +1334,10 @@ local function UpdateChargeBar(barFrame)
 
     local chargeInfo = barFrame._cachedChargeInfo
     if not chargeInfo then
+        if cfg.showText ~= false and barFrame._text then
+            barFrame._text:SetText("")
+        end
+        ClearCountText(barFrame)
         UpdateBarActiveState(barFrame, false)
         return
     end
@@ -1371,6 +1438,11 @@ local function UpdateChargeBar(barFrame)
             barFrame._text:SetText("")
         end
     end
+    if type(exactCharges) == "number" then
+        SetCountText(barFrame, tostring(exactCharges))
+    else
+        ClearCountText(barFrame)
+    end
 
     UpdateBarActiveState(barFrame, type(exactCharges) == "number" and exactCharges < maxCharges)
 end
@@ -1389,6 +1461,7 @@ local function UpdateDurationBar(barFrame)
     local cdmFrame = nil
     local auraInstanceID = nil
     local unit = nil
+    local auraCount = nil
 
     if cooldownID then
         cdmFrame = FindCDMFrame(cooldownID)
@@ -1400,6 +1473,7 @@ local function UpdateDurationBar(barFrame)
                 auraActive = true
                 auraInstanceID = cdmFrame.auraInstanceID
                 unit = cdmFrame.auraDataUnit or cfg.unit or "player"
+                auraCount = ExtractAuraCount(cdmFrame.auraData)
                 barFrame._trackedAuraInstanceID = auraInstanceID
                 barFrame._trackedUnit = unit
             end
@@ -1420,6 +1494,7 @@ local function UpdateDurationBar(barFrame)
             auraActive = true
             auraInstanceID = barFrame._trackedAuraInstanceID
             barFrame._trackedUnit = unit
+            auraCount = ExtractAuraCount(auraData)
         end
     end
 
@@ -1431,6 +1506,7 @@ local function UpdateDurationBar(barFrame)
             auraActive = true
             auraInstanceID = auraData.auraInstanceID
             unit = primaryUnit
+            auraCount = ExtractAuraCount(auraData)
             barFrame._trackedAuraInstanceID = auraData.auraInstanceID
             barFrame._trackedUnit = primaryUnit
         else
@@ -1440,6 +1516,7 @@ local function UpdateDurationBar(barFrame)
                 auraActive = true
                 auraInstanceID = auraData.auraInstanceID
                 unit = other
+                auraCount = ExtractAuraCount(auraData)
                 barFrame._trackedAuraInstanceID = auraData.auraInstanceID
                 barFrame._trackedUnit = other
             end
@@ -1459,6 +1536,10 @@ local function UpdateDurationBar(barFrame)
     if auraActive and auraInstanceID and unit then
 
         local timerOK = pcall(function()
+            if auraCount == nil then
+                local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+                auraCount = ExtractAuraCount(auraData)
+            end
             local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
             if durObj then
 
@@ -1510,6 +1591,16 @@ local function UpdateDurationBar(barFrame)
                         barFrame._text:SetText(remaining)
                     end
                 end
+                if auraCount then
+                    SetCountText(barFrame, tostring(auraCount))
+                else
+                    ClearCountText(barFrame)
+                end
+            else
+                if cfg.showText ~= false and barFrame._text then
+                    barFrame._text:SetText("")
+                end
+                ClearCountText(barFrame)
             end
         end)
 
@@ -1529,6 +1620,7 @@ local function UpdateDurationBar(barFrame)
             if cfg.showText ~= false and barFrame._text then
                 barFrame._text:SetText("")
             end
+            ClearCountText(barFrame)
         end
     else
 
@@ -1548,6 +1640,7 @@ local function UpdateDurationBar(barFrame)
         if cfg.showText ~= false and barFrame._text then
             barFrame._text:SetText("")
         end
+        ClearCountText(barFrame)
     end
 
 

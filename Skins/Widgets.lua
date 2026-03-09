@@ -109,7 +109,7 @@ function ns.UI.OpenSpellCatalogFrame(title, sections, onManualAdd)
                 local tex = entry.icon and ("|T" .. entry.icon .. ":16:16:0:0|t ") or ""
                 local monitoredSuffix = ""
                 if entry.monitored then
-                    monitoredSuffix = " |cff33ff99- " .. ((ns.L and ns.L.mbAlreadyMonitored) or "Monitored") .. "|r"
+                    monitoredSuffix = " |cff00ccff- " .. ((ns.L and ns.L.mbAlreadyMonitored) or "Monitored") .. "|r"
                 end
                 btn:SetText(tex .. "|cffffffff" .. entry.name .. "|r  |cff888888(" .. entry.spellID .. ")|r" .. monitoredSuffix)
                 btn:SetFullWidth(true)

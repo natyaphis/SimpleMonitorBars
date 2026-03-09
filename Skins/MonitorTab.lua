@@ -17,6 +17,7 @@ local MASK_AND_BORDER_STYLE_ITEMS = {
 }
 
 local BORDER_STYLE_ITEMS = {
+    ["none"] = L.mbBorderNone,
     ["whole"] = L.mbBorderWhole,
     ["segment"] = L.mbBorderSegment,
 }
@@ -36,17 +37,11 @@ local STRATA_ITEMS = {
 local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH" }
 
 local TEXT_ANCHOR_ITEMS = {
-    ["TOPLEFT"]     = L.posTL,
-    ["TOP"]         = L.posTop,
-    ["TOPRIGHT"]    = L.posTR,
     ["LEFT"]        = L.posLeft,
     ["CENTER"]      = L.posCenter,
     ["RIGHT"]       = L.posRight,
-    ["BOTTOMLEFT"]  = L.posBL,
-    ["BOTTOM"]      = L.posBottom,
-    ["BOTTOMRIGHT"] = L.posBR,
 }
-local TEXT_ANCHOR_ORDER = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
+local TEXT_ANCHOR_ORDER = { "LEFT", "CENTER", "RIGHT" }
 
 local BAR_TYPE_ITEMS = {
     ["stack"]    = L.mbTypeStack,
@@ -69,18 +64,66 @@ local selectedBarID = nil
 local PLAYER_CLASS_TAG = select(2, UnitClass("player"))
 local ICICLES_SPELL_ID = 205473
 local HALF_CONTROL_RELATIVE_WIDTH = 0.5
-local LABELED_ROW_HEIGHT = 40
+local LABELED_ROW_HEIGHT = 44
+local COMPACT_ROW_HEIGHT = 24
 local CONTROL_ROW_SPACING = 3
-local SECTION_SPACER_LINES = "\n"
+local SECTION_SPACER_HEIGHT = 3
 local MONITOR_BARS_FLOW_LAYOUT = "SMBFlow3"
 local MONITOR_BARS_SPEC_LAYOUT = "SMBSpecSpread"
 local TEXTURE_DROPDOWN_VISIBLE_ITEMS = 20
+local TEXTURE_DROPDOWN_ITEM_TYPE = "SMB-Dropdown-Item-Texture"
 local monitorBarsFlowRegistered = false
 local monitorBarsSpecLayoutRegistered = false
+local textureDropdownItemRegistered = false
 
 local function RoundToOneDecimal(num)
     if type(num) ~= "number" then return num end
     return math.floor(num * 10 + 0.5) / 10
+end
+
+local function GetSelectedBarConfig()
+    local bars = ns.db and ns.db.monitorBars and ns.db.monitorBars.bars
+    if type(bars) ~= "table" then
+        return nil
+    end
+
+    for _, barCfg in ipairs(bars) do
+        if type(barCfg) == "table" and barCfg.id == selectedBarID then
+            return barCfg
+        end
+    end
+    return nil
+end
+
+local function GetSelectedBarDisplayName()
+    local barCfg = GetSelectedBarConfig()
+    if not barCfg then
+        return nil
+    end
+
+    local spellName = barCfg.spellName
+    if (not spellName or spellName == "") and type(barCfg.spellID) == "number" and barCfg.spellID > 0 then
+        spellName = C_Spell.GetSpellName(barCfg.spellID)
+    end
+
+    if spellName and spellName ~= "" then
+        return spellName
+    end
+    return L.mbNoSpell or "未选择技能"
+end
+
+function ns.GetSelectedMonitorBarNoticeText()
+    local spellName = GetSelectedBarDisplayName()
+    if not spellName then
+        return ""
+    end
+    return string.format(L.mbEditingBarNoticeFormat or "当前选中[%s]正在编辑", spellName)
+end
+
+local function RefreshSelectedBarNotice()
+    if type(ns._refreshSelectedBarNotice) == "function" then
+        ns._refreshSelectedBarNotice()
+    end
 end
 
 local function IsClassMatchedForCurrentPlayer(classTag)
@@ -112,47 +155,102 @@ local function GetTextureItems()
     return items, order
 end
 
-local function ApplyTextureDropdownPreviews(dropdown)
-    if not dropdown or not dropdown.pullout or not dropdown.pullout.IterateItems then
-        return
-    end
-
-    for _, item in dropdown.pullout:IterateItems() do
-        if item and item.userdata and item.userdata.value then
-            if not item._smbTexturePreview then
-                local preview = item.frame:CreateTexture(nil, "BACKGROUND")
-                preview:SetPoint("TOPLEFT", item.frame, "TOPLEFT", 18, -1)
-                preview:SetPoint("BOTTOMRIGHT", item.frame, "BOTTOMRIGHT", -8, 1)
-                preview:SetAlpha(0.9)
-                item._smbTexturePreview = preview
-
-                item.text:SetShadowColor(0, 0, 0, 1)
-                item.text:SetShadowOffset(1, -1)
-            end
-
-            local texPath = LSM and LSM.Fetch and LSM:Fetch("statusbar", item.userdata.value)
-            item._smbTexturePreview:SetTexture(texPath or "Interface\\Buttons\\WHITE8X8")
-            item._smbTexturePreview:Show()
-        elseif item and item._smbTexturePreview then
-            item._smbTexturePreview:Hide()
-        end
-    end
-end
-
 local function EnhanceTextureDropdown(dropdown)
     if not dropdown or not dropdown.pullout or not dropdown.pullout.IterateItems then
         return
     end
 
     dropdown.pullout:SetMaxHeight((TEXTURE_DROPDOWN_VISIBLE_ITEMS * 17) + 34)
-    ApplyTextureDropdownPreviews(dropdown)
+end
 
-    if not dropdown._smbTexturePreviewHooked and dropdown.pullout.Open then
-        hooksecurefunc(dropdown.pullout, "Open", function()
-            ApplyTextureDropdownPreviews(dropdown)
-        end)
-        dropdown._smbTexturePreviewHooked = true
+local function RegisterTextureDropdownItem()
+    if textureDropdownItemRegistered or not AceGUI then
+        return
     end
+
+    local itemBaseLib = LibStub("AceGUI-3.0-DropDown-ItemBase", true)
+    if not itemBaseLib or not itemBaseLib.GetItemBase then
+        return
+    end
+
+    local ItemBase = itemBaseLib:GetItemBase()
+    local widgetType = TEXTURE_DROPDOWN_ITEM_TYPE
+    local widgetVersion = 1
+
+    local function UpdateToggle(self)
+        if self.value then
+            self.check:Show()
+        else
+            self.check:Hide()
+        end
+    end
+
+    local function RefreshTexturePreview(self)
+        if not self._smbTexturePreview then
+            return
+        end
+        local texPath = LSM and LSM.Fetch and LSM:Fetch("statusbar", self.userdata and self.userdata.value)
+        self._smbTexturePreview:SetTexture(texPath or "Interface\\Buttons\\WHITE8X8")
+        self._smbTexturePreview:Show()
+    end
+
+    local function OnRelease(self)
+        ItemBase.OnRelease(self)
+        self:SetValue(nil)
+        self._smbTexturePreview:Hide()
+        self._smbTexturePreview:SetTexture(nil)
+        self.text:SetShadowColor(0, 0, 0, 0)
+        self.text:SetShadowOffset(0, 0)
+    end
+
+    local function Frame_OnClick(this)
+        local self = this.obj
+        if self.disabled then return end
+        self.value = not self.value
+        if self.value then
+            PlaySound(856)
+        else
+            PlaySound(857)
+        end
+        UpdateToggle(self)
+        self:Fire("OnValueChanged", self.value)
+    end
+
+    local function SetValue(self, value)
+        self.value = value
+        UpdateToggle(self)
+    end
+
+    local function SetText(self, text)
+        ItemBase.SetText(self, text)
+        RefreshTexturePreview(self)
+    end
+
+    local function Constructor()
+        local self = ItemBase.Create(widgetType)
+
+        self.frame:SetScript("OnClick", Frame_OnClick)
+
+        self._smbTexturePreview = self.frame:CreateTexture(nil, "BACKGROUND")
+        self._smbTexturePreview:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 18, -1)
+        self._smbTexturePreview:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", -8, 1)
+        self._smbTexturePreview:SetAlpha(0.9)
+        self._smbTexturePreview:Hide()
+
+        self.text:SetShadowColor(0, 0, 0, 1)
+        self.text:SetShadowOffset(1, -1)
+
+        self.SetText = SetText
+        self.SetValue = SetValue
+        self.GetValue = function(widget) return widget.value end
+        self.OnRelease = OnRelease
+
+        AceGUI:RegisterAsWidget(self)
+        return self
+    end
+
+    AceGUI:RegisterWidgetType(widgetType, Constructor, widgetVersion + ItemBase.version)
+    textureDropdownItemRegistered = true
 end
 
 local function NewBarDefaults(id, barType, spellID, spellName, unit)
@@ -178,12 +276,19 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         maskAndBorderStyle = "1",
         showIcon   = false,
         showText   = false,
-        textAlign  = "RIGHT",
-        textOffsetX = -5,
+        textAlign  = "CENTER",
+        textOffsetX = 0,
         textOffsetY = 0,
         fontName   = "",
         fontSize   = 14,
         outline    = "OUTLINE",
+        showCountText = false,
+        countTextAnchor = "LEFT",
+        countTextOffsetX = 0,
+        countTextOffsetY = 0,
+        countFontName = "",
+        countFontSize = 14,
+        countOutline = "OUTLINE",
         barTexture = "Solid",
         colorThreshold  = 0,
         thresholdColor  = { 1.0, 1.0, 1.0, 1 },
@@ -194,15 +299,34 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         hideFromCDM     = false,
         showCondition   = (barType == "duration") and "active_only" or "always",
         frameStrata     = "MEDIUM",
-        textAnchor      = "RIGHT",
+        textAnchor      = "CENTER",
         smoothAnimation = true,
         ringThickness   = 10,
         showSpellName  = false,
+        nameAnchor     = "RIGHT",
         nameOutline    = "OUTLINE",
         nameFontName   = "",
         nameFontSize   = 14,
         specs           = { GetSpecialization() or 1 },
     }
+end
+
+local function ResetBarToDefaults(barCfg)
+    if not barCfg then
+        return
+    end
+
+    local resetBar = NewBarDefaults(barCfg.id, barCfg.barType, barCfg.spellID, barCfg.spellName, barCfg.unit)
+    resetBar.class = barCfg.class
+    resetBar.specs = ns.DeepCopy(barCfg.specs or resetBar.specs)
+    resetBar.enabled = barCfg.enabled
+
+    for k in pairs(barCfg) do
+        barCfg[k] = nil
+    end
+    for k, v in pairs(resetBar) do
+        barCfg[k] = ns.DeepCopy(v)
+    end
 end
 
 local function GetClassItems()
@@ -238,6 +362,65 @@ local function GetBarDropdownList(cfg)
         end
     end
     return items, order, idToIndex
+end
+
+local function IsBarVisibleForCurrentSpec(barCfg)
+    if not barCfg or barCfg.enabled == false then
+        return false
+    end
+
+    local specs = barCfg and barCfg.specs
+    if type(specs) ~= "table" or #specs == 0 then
+        return true
+    end
+
+    local currentSpec = GetSpecialization() or 1
+    for _, specIndex in ipairs(specs) do
+        if specIndex == currentSpec then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetDefaultBarIDForCurrentSpec(cfg, barOrder, idToIndex)
+    for _, barID in ipairs(barOrder or {}) do
+        local index = idToIndex and idToIndex[barID]
+        local barCfg = index and cfg and cfg.bars and cfg.bars[index]
+        if barCfg and IsBarVisibleForCurrentSpec(barCfg) then
+            return barID
+        end
+    end
+    return nil
+end
+
+local function AddMonitorHeading(parent, text)
+    local topSpacer = AceGUI:Create("Label")
+    topSpacer:SetText("")
+    topSpacer:SetFullWidth(true)
+    topSpacer:SetHeight(SECTION_SPACER_HEIGHT)
+    parent:AddChild(topSpacer)
+
+    local heading = AceGUI:Create("Heading")
+    heading:SetText(text)
+    heading:SetFullWidth(true)
+    parent:AddChild(heading)
+
+    local bottomSpacer = AceGUI:Create("Label")
+    bottomSpacer:SetText("")
+    bottomSpacer:SetFullWidth(true)
+    bottomSpacer:SetHeight(SECTION_SPACER_HEIGHT)
+    parent:AddChild(bottomSpacer)
+end
+
+local function NormalizeDropdownToFrame(widget)
+    if not widget or not widget.frame or not widget.dropdown then
+        return
+    end
+
+    widget.dropdown:ClearAllPoints()
+    widget.dropdown:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", -14.5, 0)
+    widget.dropdown:SetPoint("BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", 20.5, 0)
 end
 
 local function RegisterMonitorBarsFlowLayout()
@@ -412,8 +595,9 @@ end
 
 local function AddDeleteButton(parent, barCfg, rebuildAll, widthSource)
     local deleteBtn = AceGUI:Create("Button")
+    deleteBtn:SetHeight(35)
     local function SetDeleteButtonText(text)
-        deleteBtn:SetText(text)
+        deleteBtn:SetText("|cffff4444" .. text .. "|r")
     end
 
     SetDeleteButtonText(L.mbDeleteBar)
@@ -443,23 +627,10 @@ local function AddDeleteButton(parent, barCfg, rebuildAll, widthSource)
             end
         end
         selectedBarID = nil
+        RefreshSelectedBarNotice()
         rebuildAll()
     end)
-
     parent:AddChild(deleteBtn)
-
-    if widthSource and widthSource.frame then
-        C_Timer.After(0, function()
-            if not deleteBtn or not deleteBtn.frame or not widthSource.frame then return end
-            local width = widthSource.frame:GetWidth()
-            if width and width > 0 then
-                deleteBtn:SetWidth(width)
-                if deleteBtn.frame.SetWidth then
-                    deleteBtn.frame:SetWidth(width)
-                end
-            end
-        end)
-    end
 end
 
 local function BuildBarConfig(container, barCfg, rebuildAll)
@@ -494,11 +665,25 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         if f then MB:ApplyStyle(f) end
     end
 
+    local function RefreshPosition()
+        local f = MB:GetActiveFrame(barCfg.id)
+        if not f then
+            return
+        end
+
+        local frameScale = f:GetEffectiveScale()
+        local posX = MB.getNearestPixel(barCfg.posX or 0, frameScale)
+        local posY = MB.getNearestPixel(barCfg.posY or 0, frameScale)
+        f:ClearAllPoints()
+        f:SetPoint("CENTER", UIParent, "CENTER", posX, posY)
+    end
+
     local function AddSpacer(parent)
         -- Keep section transitions readable on narrow window layouts.
         local spacer = AceGUI:Create("Label")
-        spacer:SetText(SECTION_SPACER_LINES)
+        spacer:SetText("")
         spacer:SetFullWidth(true)
+        spacer:SetHeight(SECTION_SPACER_HEIGHT)
         parent:AddChild(spacer)
     end
 
@@ -510,17 +695,52 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         return row
     end
 
+    local topActionRow = AddTwoColumnRow(container)
+    topActionRow.noAutoHeight = true
+    topActionRow:SetHeight(COMPACT_ROW_HEIGHT)
+
     local enableCB = AceGUI:Create("CheckBox")
     enableCB:SetLabel(L.enable)
     enableCB:SetValue(barCfg.enabled)
+    enableCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     enableCB:SetCallback("OnValueChanged", function(_, _, val)
         barCfg.enabled = val
         MB:RebuildAllBars()
     end)
-    enableCB:SetFullWidth(true)
-    container:AddChild(enableCB)
+    topActionRow:AddChild(enableCB)
 
-    ns.UI.AddHeading(container, "触发设置")
+    local resetBtn = AceGUI:Create("Button")
+    local pendingReset = false
+    local function SetResetButtonText()
+        if pendingReset then
+            resetBtn:SetText("|cffff4444" .. (L.mbResetBarConfirm or "确认恢复？") .. "|r")
+        else
+            resetBtn:SetText("|cffffd200" .. (L.mbResetBar or "恢复默认设置") .. "|r")
+        end
+    end
+    resetBtn:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+    resetBtn:SetCallback("OnClick", function()
+        if not pendingReset then
+            pendingReset = true
+            SetResetButtonText()
+            C_Timer.After(3, function()
+                if pendingReset and resetBtn and resetBtn.frame then
+                    pendingReset = false
+                    SetResetButtonText()
+                end
+            end)
+            return
+        end
+
+        pendingReset = false
+        ResetBarToDefaults(barCfg)
+        MB:RebuildAllBars()
+        rebuildAll()
+    end)
+    SetResetButtonText()
+    topActionRow:AddChild(resetBtn)
+
+    AddMonitorHeading(container, "触发设置")
 
     local spellRow = AddTwoColumnRow(container)
     spellRow.noAutoHeight = true
@@ -531,7 +751,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     spellBox:SetText(barCfg.spellID > 0 and tostring(barCfg.spellID) or "")
     spellBox:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     spellBox.frame:SetHeight(LABELED_ROW_HEIGHT)
-    spellBox.alignoffset = 26
+    spellBox.alignoffset = 30
     spellBox:SetCallback("OnEnterPressed", function(_, _, val)
         local id = tonumber(val)
         if id and id > 0 then
@@ -553,7 +773,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end
 
     local nameLabel = AceGUI:Create("Label")
-    nameLabel:SetText("|cff88ccff" .. L.mbSpellName .. ": " .. spellName .. "|r")
+    nameLabel:SetText("|cff00ccff" .. L.mbSpellName .. ": " .. spellName .. "|r")
     nameLabel:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     nameLabel:SetFontObject(GameFontHighlightSmall)
     nameLabel.frame:SetHeight(LABELED_ROW_HEIGHT)
@@ -685,7 +905,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     if barCfg.barType == "stack" then
         local trackerRow = AddTwoColumnRow(container)
         trackerRow.noAutoHeight = true
-        trackerRow:SetHeight(24)
+        trackerRow:SetHeight(COMPACT_ROW_HEIGHT)
 
         hideTrackerCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
         trackerRow:AddChild(hideTrackerCB)
@@ -725,15 +945,9 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             MB:RebuildAllBars()
         end)
         container:AddChild(chargeSlider)
-
-        local chargeTip = AceGUI:Create("Label")
-        chargeTip:SetText("|cffaaaaaa" .. L.mbMaxChargesAuto .. "|r")
-        chargeTip:SetFullWidth(true)
-        chargeTip:SetFontObject(GameFontHighlightSmall)
-        container:AddChild(chargeTip)
     end
 
-    ns.UI.AddHeading(container, L.mbSpecs)
+    AddMonitorHeading(container, L.mbSpecs)
 
     local specGroup = AceGUI:Create("SimpleGroup")
     specGroup:SetFullWidth(true)
@@ -773,7 +987,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end
     AddSpacer(container)
 
-    ns.UI.AddHeading(container, L.generalSettings)
+    AddMonitorHeading(container, L.generalSettings)
 
     local styleGroup = AceGUI:Create("SimpleGroup")
     styleGroup:SetFullWidth(true)
@@ -830,7 +1044,44 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(hSlider)
     end
 
-    ns.UI.AddHeading(styleGroup, "材质染色")
+    local syncingPositionSliders = false
+
+    local posXSlider = AceGUI:Create("Slider")
+    posXSlider:SetLabel(L.mbBarOffsetX)
+    posXSlider:SetSliderValues(-1000, 1000, 0.1)
+    posXSlider:SetValue(RoundToOneDecimal(barCfg.posX or 0))
+    posXSlider:SetFullWidth(true)
+    posXSlider:SetCallback("OnValueChanged", function(_, _, val)
+        if syncingPositionSliders then
+            return
+        end
+        barCfg.posX = RoundToOneDecimal(val)
+        RefreshPosition()
+    end)
+    styleGroup:AddChild(posXSlider)
+
+    local posYSlider = AceGUI:Create("Slider")
+    posYSlider:SetLabel(L.mbBarOffsetY)
+    posYSlider:SetSliderValues(-600, 600, 0.1)
+    posYSlider:SetValue(RoundToOneDecimal(barCfg.posY or 0))
+    posYSlider:SetFullWidth(true)
+    posYSlider:SetCallback("OnValueChanged", function(_, _, val)
+        if syncingPositionSliders then
+            return
+        end
+        barCfg.posY = RoundToOneDecimal(val)
+        RefreshPosition()
+    end)
+    styleGroup:AddChild(posYSlider)
+
+    barCfg._smbSyncPositionSliders = function(posX, posY)
+        syncingPositionSliders = true
+        posXSlider:SetValue(RoundToOneDecimal(posX or 0))
+        posYSlider:SetValue(RoundToOneDecimal(posY or 0))
+        syncingPositionSliders = false
+    end
+
+    AddMonitorHeading(styleGroup, "材质染色")
 
     local hasTextureDropdown = false
     if barCfg.barShape ~= "Ring" then
@@ -839,7 +1090,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             hasTextureDropdown = true
             local texDD = AceGUI:Create("Dropdown")
             texDD:SetLabel(L.mbBarTexture)
-            texDD:SetList(texItems, texOrder)
+            texDD:SetList(texItems, texOrder, TEXTURE_DROPDOWN_ITEM_TYPE)
             EnhanceTextureDropdown(texDD)
             texDD:SetValue(barCfg.barTexture or "Solid")
             texDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
@@ -985,31 +1236,31 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         borderRow:SetFullWidth(true)
         borderRow:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
         styleGroup:AddChild(borderRow)
+        local mbsDD
 
         local borderStyleDD = AceGUI:Create("Dropdown")
         borderStyleDD:SetLabel(L.mbBorderStyle)
-        borderStyleDD:SetList(BORDER_STYLE_ITEMS, { "whole", "segment" })
+        borderStyleDD:SetList(BORDER_STYLE_ITEMS, { "none", "whole", "segment" })
         borderStyleDD:SetValue(barCfg.borderStyle or "whole")
         borderStyleDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
         borderStyleDD:SetCallback("OnValueChanged", function(_, _, val)
             barCfg.borderStyle = val
+            mbsDD:SetDisabled(val == "none")
             MB:RebuildAllBars()
-            rebuildAll()
         end)
         borderRow:AddChild(borderStyleDD)
 
-        if (barCfg.borderStyle or "whole") == "whole" then
-            local mbsDD = AceGUI:Create("Dropdown")
-            mbsDD:SetLabel(L.mbMaskAndBorderStyle or "Border Style")
-            mbsDD:SetList(MASK_AND_BORDER_STYLE_ITEMS, { "0", "1", "2", "3", "4", "5" })
-            mbsDD:SetValue(barCfg.maskAndBorderStyle or "1")
-            mbsDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-            mbsDD:SetCallback("OnValueChanged", function(_, _, val)
-                barCfg.maskAndBorderStyle = val
-                MB:RebuildAllBars()
-            end)
-            borderRow:AddChild(mbsDD)
-        end
+        mbsDD = AceGUI:Create("Dropdown")
+        mbsDD:SetLabel(L.mbMaskAndBorderStyle or "Border Width")
+        mbsDD:SetList(MASK_AND_BORDER_STYLE_ITEMS, { "0", "1", "2", "3", "4", "5" })
+        mbsDD:SetValue(barCfg.maskAndBorderStyle or "1")
+        mbsDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        mbsDD:SetDisabled((barCfg.borderStyle or "whole") == "none")
+        mbsDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.maskAndBorderStyle = val
+            MB:RebuildAllBars()
+        end)
+        borderRow:AddChild(mbsDD)
     end
 
 
@@ -1026,11 +1277,11 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(gapSlider)
     end
 
-    ns.UI.AddHeading(styleGroup, "技能文字")
+    AddMonitorHeading(styleGroup, "技能文字")
 
     local skillToggleRow = AddTwoColumnRow(styleGroup)
     skillToggleRow.noAutoHeight = true
-    skillToggleRow:SetHeight(24)
+    skillToggleRow:SetHeight(COMPACT_ROW_HEIGHT)
 
     local nameCB = AceGUI:Create("CheckBox")
     nameCB:SetLabel(L.mbShowSpellName or "Show Spell Name")
@@ -1062,20 +1313,20 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     local nAnchorDD = AceGUI:Create("Dropdown")
     nAnchorDD:SetLabel(L.mbNameAnchor or "Name Anchor")
     nAnchorDD:SetList(TEXT_ANCHOR_ITEMS, TEXT_ANCHOR_ORDER)
-    nAnchorDD:SetValue(barCfg.nameAnchor or "CENTER")
+    nAnchorDD:SetValue(barCfg.nameAnchor or "RIGHT")
     nAnchorDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     nameRow:AddChild(nAnchorDD)
 
     local nTxSlider = AceGUI:Create("Slider")
     nTxSlider:SetLabel(L.mbNameOffsetX or "Name Offset X")
-    nTxSlider:SetSliderValues(-50, 50, 1)
+    nTxSlider:SetSliderValues(-100, 100, 1)
     nTxSlider:SetValue(barCfg.nameOffsetX or 0)
     nTxSlider:SetFullWidth(true)
     styleGroup:AddChild(nTxSlider)
 
     local nTySlider = AceGUI:Create("Slider")
     nTySlider:SetLabel(L.mbNameOffsetY or "Name Offset Y")
-    nTySlider:SetSliderValues(-50, 50, 1)
+    nTySlider:SetSliderValues(-100, 100, 1)
     nTySlider:SetValue(barCfg.nameOffsetY or 0)
     nTySlider:SetFullWidth(true)
     styleGroup:AddChild(nTySlider)
@@ -1155,131 +1406,253 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     SetSkillNameControlsDisabled(not (barCfg.showSpellName or false))
 
-    ns.UI.AddHeading(styleGroup, "层数/冷却文字")
-
-    local textCB = AceGUI:Create("CheckBox")
-    local SetTextControlsDisabled
-    local showTextLabel
-    if barCfg.barType == "charge" then
-        showTextLabel = L.mbShowTextCharge
-    elseif barCfg.barType == "duration" then
-        showTextLabel = L.mbShowTextDuration or "Show Duration Text"
-    else
-        showTextLabel = L.mbShowTextStack
-    end
-    textCB:SetLabel(showTextLabel)
-    textCB:SetValue(barCfg.showText ~= false)
-    textCB:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.showText = val
-        SetTextControlsDisabled(not val)
-        Refresh()
-    end)
-    textCB:SetFullWidth(true)
-    styleGroup:AddChild(textCB)
-
-    local textRow = AceGUI:Create("SimpleGroup")
-    textRow:SetFullWidth(true)
-    textRow:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
-    styleGroup:AddChild(textRow)
-
-    local outlineDD = AceGUI:Create("Dropdown")
-    outlineDD:SetLabel(L.mbStackTextOutline or L.outline)
-    outlineDD:SetList(OUTLINE_ITEMS, { "NONE", "OUTLINE", "THICKOUTLINE" })
-    outlineDD:SetValue(barCfg.outline or "OUTLINE")
-    outlineDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-    outlineDD:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.outline = val
-        Refresh()
-    end)
-    textRow:AddChild(outlineDD)
-
-    local anchorDD = AceGUI:Create("Dropdown")
-    anchorDD:SetLabel(L.mbStackTextAnchor or L.mbTextAnchor)
-    anchorDD:SetList(TEXT_ANCHOR_ITEMS, TEXT_ANCHOR_ORDER)
-    anchorDD:SetValue(barCfg.textAnchor or barCfg.textAlign or "RIGHT")
-    anchorDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-    anchorDD:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.textAnchor = val
-        Refresh()
-    end)
-    textRow:AddChild(anchorDD)
-
-    local txSlider = AceGUI:Create("Slider")
-    txSlider:SetLabel(L.mbStackTextOffsetX or L.mbTextOffsetX)
-    txSlider:SetSliderValues(-50, 50, 1)
-    txSlider:SetValue(barCfg.textOffsetX or -5)
-    txSlider:SetFullWidth(true)
-    txSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.textOffsetX = math.floor(val)
-        Refresh()
-    end)
-    styleGroup:AddChild(txSlider)
-
-    local tySlider = AceGUI:Create("Slider")
-    tySlider:SetLabel(L.mbStackTextOffsetY or L.mbTextOffsetY)
-    tySlider:SetSliderValues(-30, 30, 1)
-    tySlider:SetValue(barCfg.textOffsetY or 0)
-    tySlider:SetFullWidth(true)
-    tySlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.textOffsetY = math.floor(val)
-        Refresh()
-    end)
-    styleGroup:AddChild(tySlider)
-
     local fontItems, fontOrder = GetFontItems()
-    local fontDD
-    local fontSizeSlider
-    if next(fontItems) then
-        local fontRow = AddTwoColumnRow(styleGroup)
 
-        fontDD = AceGUI:Create("Dropdown")
-        fontDD:SetLabel(L.mbStackTextFontFamily or L.fontFamily)
-        fontDD:SetList(fontItems, fontOrder)
-        fontDD:SetValue(barCfg.fontName ~= "" and barCfg.fontName or nil)
-        fontDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        fontDD:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.fontName = val
-            Refresh()
-        end)
-        fontRow:AddChild(fontDD)
+    if barCfg.barType == "stack" or barCfg.barType == "charge" or barCfg.barType == "duration" then
+        AddSpacer(styleGroup)
+        AddMonitorHeading(styleGroup, L.mbCountTextHeading or "层数文字")
 
-        fontSizeSlider = AceGUI:Create("Slider")
-        fontSizeSlider:SetLabel(L.mbStackTextFontSize or L.fontSize)
-        fontSizeSlider:SetSliderValues(6, 24, 1)
-        fontSizeSlider:SetValue(barCfg.fontSize or 14)
-        fontSizeSlider:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        fontSizeSlider:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.fontSize = math.floor(val)
+        local countTextCB = AceGUI:Create("CheckBox")
+        local SetCountTextControlsDisabled
+        countTextCB:SetLabel(L.mbShowCountText or "显示层数文字")
+        countTextCB:SetValue(barCfg.showCountText == true)
+        countTextCB:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.showCountText = val
+            SetCountTextControlsDisabled(not val)
             Refresh()
         end)
-        fontRow:AddChild(fontSizeSlider)
-    else
-        fontSizeSlider = AceGUI:Create("Slider")
-        fontSizeSlider:SetLabel(L.mbStackTextFontSize or L.fontSize)
-        fontSizeSlider:SetSliderValues(6, 24, 1)
-        fontSizeSlider:SetValue(barCfg.fontSize or 14)
-        fontSizeSlider:SetFullWidth(true)
-        fontSizeSlider:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.fontSize = math.floor(val)
+        countTextCB:SetFullWidth(true)
+        styleGroup:AddChild(countTextCB)
+
+        local countTextRow = AceGUI:Create("SimpleGroup")
+        countTextRow:SetFullWidth(true)
+        countTextRow:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
+        styleGroup:AddChild(countTextRow)
+
+        local countOutlineDD = AceGUI:Create("Dropdown")
+        countOutlineDD:SetLabel(L.mbCountTextOutline or "层数文字描边")
+        countOutlineDD:SetList(OUTLINE_ITEMS, { "NONE", "OUTLINE", "THICKOUTLINE" })
+        countOutlineDD:SetValue(barCfg.countOutline or "OUTLINE")
+        countOutlineDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        countOutlineDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.countOutline = val
             Refresh()
         end)
-        styleGroup:AddChild(fontSizeSlider)
+        countTextRow:AddChild(countOutlineDD)
+
+        local countAnchorDD = AceGUI:Create("Dropdown")
+        countAnchorDD:SetLabel(L.mbCountTextAnchor or "层数文字锚点")
+        countAnchorDD:SetList(TEXT_ANCHOR_ITEMS, TEXT_ANCHOR_ORDER)
+        countAnchorDD:SetValue(barCfg.countTextAnchor or "LEFT")
+        countAnchorDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        countAnchorDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.countTextAnchor = val
+            Refresh()
+        end)
+        countTextRow:AddChild(countAnchorDD)
+
+        local countXSlider = AceGUI:Create("Slider")
+        countXSlider:SetLabel(L.mbCountTextOffsetX or "层数文字X偏移")
+        countXSlider:SetSliderValues(-100, 100, 1)
+        countXSlider:SetValue(barCfg.countTextOffsetX or 0)
+        countXSlider:SetFullWidth(true)
+        countXSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.countTextOffsetX = math.floor(val)
+            Refresh()
+        end)
+        styleGroup:AddChild(countXSlider)
+
+        local countYSlider = AceGUI:Create("Slider")
+        countYSlider:SetLabel(L.mbCountTextOffsetY or "层数文字Y偏移")
+        countYSlider:SetSliderValues(-100, 100, 1)
+        countYSlider:SetValue(barCfg.countTextOffsetY or 0)
+        countYSlider:SetFullWidth(true)
+        countYSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.countTextOffsetY = math.floor(val)
+            Refresh()
+        end)
+        styleGroup:AddChild(countYSlider)
+
+        local countFontDD
+        local countFontSizeSlider
+        if next(fontItems) then
+            local countFontRow = AddTwoColumnRow(styleGroup)
+
+            countFontDD = AceGUI:Create("Dropdown")
+            countFontDD:SetLabel(L.mbCountTextFontFamily or "层数文字字体")
+            countFontDD:SetList(fontItems, fontOrder)
+            countFontDD:SetValue(barCfg.countFontName ~= "" and barCfg.countFontName or nil)
+            countFontDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+            countFontDD:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.countFontName = val
+                Refresh()
+            end)
+            countFontRow:AddChild(countFontDD)
+
+            countFontSizeSlider = AceGUI:Create("Slider")
+            countFontSizeSlider:SetLabel(L.mbCountTextFontSize or "层数文字字号")
+            countFontSizeSlider:SetSliderValues(6, 24, 1)
+            countFontSizeSlider:SetValue(barCfg.countFontSize or 14)
+            countFontSizeSlider:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+            countFontSizeSlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.countFontSize = math.floor(val)
+                Refresh()
+            end)
+            countFontRow:AddChild(countFontSizeSlider)
+        else
+            countFontSizeSlider = AceGUI:Create("Slider")
+            countFontSizeSlider:SetLabel(L.mbCountTextFontSize or "层数文字字号")
+            countFontSizeSlider:SetSliderValues(6, 24, 1)
+            countFontSizeSlider:SetValue(barCfg.countFontSize or 14)
+            countFontSizeSlider:SetFullWidth(true)
+            countFontSizeSlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.countFontSize = math.floor(val)
+                Refresh()
+            end)
+            styleGroup:AddChild(countFontSizeSlider)
+        end
+
+        SetCountTextControlsDisabled = function(disabled)
+            countOutlineDD:SetDisabled(disabled)
+            countAnchorDD:SetDisabled(disabled)
+            countXSlider:SetDisabled(disabled)
+            countYSlider:SetDisabled(disabled)
+            if countFontDD then
+                countFontDD:SetDisabled(disabled)
+            end
+            if countFontSizeSlider then
+                countFontSizeSlider:SetDisabled(disabled)
+            end
+        end
+
+        SetCountTextControlsDisabled(barCfg.showCountText ~= true)
     end
 
-    SetTextControlsDisabled = function(disabled)
-        outlineDD:SetDisabled(disabled)
-        anchorDD:SetDisabled(disabled)
-        txSlider:SetDisabled(disabled)
-        tySlider:SetDisabled(disabled)
-        if fontDD then
-            fontDD:SetDisabled(disabled)
-        end
-        if fontSizeSlider then
-            fontSizeSlider:SetDisabled(disabled)
-        end
-    end
+    if barCfg.barType == "charge" or barCfg.barType == "duration" then
+        AddSpacer(styleGroup)
+        AddMonitorHeading(styleGroup, L.mbTimeTextHeading or "时间文字")
 
-    SetTextControlsDisabled(barCfg.showText == false)
+        local textCB = AceGUI:Create("CheckBox")
+        local SetTextControlsDisabled
+        local showTextLabel
+        if barCfg.barType == "charge" then
+            showTextLabel = L.mbShowTextCharge
+        else
+            showTextLabel = L.mbShowTextDuration or "Show Duration Text"
+        end
+        textCB:SetLabel(showTextLabel)
+        textCB:SetValue(barCfg.showText ~= false)
+        textCB:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.showText = val
+            SetTextControlsDisabled(not val)
+            Refresh()
+        end)
+        textCB:SetFullWidth(true)
+        styleGroup:AddChild(textCB)
+
+        local textRow = AceGUI:Create("SimpleGroup")
+        textRow:SetFullWidth(true)
+        textRow:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
+        styleGroup:AddChild(textRow)
+
+        local outlineDD = AceGUI:Create("Dropdown")
+        outlineDD:SetLabel(L.mbTimeTextOutline or L.outline)
+        outlineDD:SetList(OUTLINE_ITEMS, { "NONE", "OUTLINE", "THICKOUTLINE" })
+        outlineDD:SetValue(barCfg.outline or "OUTLINE")
+        outlineDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        outlineDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.outline = val
+            Refresh()
+        end)
+        textRow:AddChild(outlineDD)
+
+        local anchorDD = AceGUI:Create("Dropdown")
+        anchorDD:SetLabel(L.mbTimeTextAnchor or L.mbTextAnchor)
+        anchorDD:SetList(TEXT_ANCHOR_ITEMS, TEXT_ANCHOR_ORDER)
+        anchorDD:SetValue(barCfg.textAnchor or barCfg.textAlign or "CENTER")
+        anchorDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        anchorDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.textAnchor = val
+            Refresh()
+        end)
+        textRow:AddChild(anchorDD)
+
+        local txSlider = AceGUI:Create("Slider")
+        txSlider:SetLabel(L.mbTimeTextOffsetX or L.mbTextOffsetX)
+        txSlider:SetSliderValues(-100, 100, 1)
+        txSlider:SetValue(barCfg.textOffsetX or -5)
+        txSlider:SetFullWidth(true)
+        txSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.textOffsetX = math.floor(val)
+            Refresh()
+        end)
+        styleGroup:AddChild(txSlider)
+
+        local tySlider = AceGUI:Create("Slider")
+        tySlider:SetLabel(L.mbTimeTextOffsetY or L.mbTextOffsetY)
+        tySlider:SetSliderValues(-100, 100, 1)
+        tySlider:SetValue(barCfg.textOffsetY or 0)
+        tySlider:SetFullWidth(true)
+        tySlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.textOffsetY = math.floor(val)
+            Refresh()
+        end)
+        styleGroup:AddChild(tySlider)
+
+        local fontDD
+        local fontSizeSlider
+        if next(fontItems) then
+            local fontRow = AddTwoColumnRow(styleGroup)
+
+            fontDD = AceGUI:Create("Dropdown")
+            fontDD:SetLabel(L.mbTimeTextFontFamily or L.fontFamily)
+            fontDD:SetList(fontItems, fontOrder)
+            fontDD:SetValue(barCfg.fontName ~= "" and barCfg.fontName or nil)
+            fontDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+            fontDD:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.fontName = val
+                Refresh()
+            end)
+            fontRow:AddChild(fontDD)
+
+            fontSizeSlider = AceGUI:Create("Slider")
+            fontSizeSlider:SetLabel(L.mbTimeTextFontSize or L.fontSize)
+            fontSizeSlider:SetSliderValues(6, 24, 1)
+            fontSizeSlider:SetValue(barCfg.fontSize or 14)
+            fontSizeSlider:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+            fontSizeSlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.fontSize = math.floor(val)
+                Refresh()
+            end)
+            fontRow:AddChild(fontSizeSlider)
+        else
+            fontSizeSlider = AceGUI:Create("Slider")
+            fontSizeSlider:SetLabel(L.mbTimeTextFontSize or L.fontSize)
+            fontSizeSlider:SetSliderValues(6, 24, 1)
+            fontSizeSlider:SetValue(barCfg.fontSize or 14)
+            fontSizeSlider:SetFullWidth(true)
+            fontSizeSlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.fontSize = math.floor(val)
+                Refresh()
+            end)
+            styleGroup:AddChild(fontSizeSlider)
+        end
+
+        SetTextControlsDisabled = function(disabled)
+            outlineDD:SetDisabled(disabled)
+            anchorDD:SetDisabled(disabled)
+            txSlider:SetDisabled(disabled)
+            tySlider:SetDisabled(disabled)
+            if fontDD then
+                fontDD:SetDisabled(disabled)
+            end
+            if fontSizeSlider then
+                fontSizeSlider:SetDisabled(disabled)
+            end
+        end
+
+        SetTextControlsDisabled(barCfg.showText == false)
+    end
 
 end
 
@@ -1478,6 +1851,7 @@ function ns.BuildMonitorTab(scroll)
     -- Top-level tab builder; rebuilding this function refreshes dependent controls.
     AceGUI = AceGUI or LibStub("AceGUI-3.0")
     LSM = LSM or LibStub("LibSharedMedia-3.0", true)
+    RegisterTextureDropdownItem()
     RegisterMonitorBarsFlowLayout()
     RegisterMonitorBarsSpecLayout()
 
@@ -1510,6 +1884,27 @@ function ns.BuildMonitorTab(scroll)
     end)
     scroll:AddChild(addBtn)
 
+    local addHintTopSpacer = AceGUI:Create("Label")
+    addHintTopSpacer:SetText("")
+    addHintTopSpacer:SetFullWidth(true)
+    addHintTopSpacer:SetHeight(3)
+    scroll:AddChild(addHintTopSpacer)
+
+    local addHintLabel = AceGUI:Create("Label")
+    addHintLabel:SetText(L.mbAddBarHint or "添加监控条后，触发和专精设置一般会自动生成，\n按照需要自定义尺寸、材质、染色、文字即可。")
+    addHintLabel:SetFullWidth(true)
+    if addHintLabel.label then
+        addHintLabel.label:SetJustifyH("CENTER")
+        addHintLabel.label:SetTextColor(1, 1, 1, 1)
+    end
+    scroll:AddChild(addHintLabel)
+
+    local addHintBottomSpacer = AceGUI:Create("Label")
+    addHintBottomSpacer:SetText("")
+    addHintBottomSpacer:SetFullWidth(true)
+    addHintBottomSpacer:SetHeight(3)
+    scroll:AddChild(addHintBottomSpacer)
+
     local barItems, barOrder, idToIndex = GetBarDropdownList(cfg)
     if #barOrder == 0 then
         local emptyLabel = AceGUI:Create("Label")
@@ -1522,15 +1917,35 @@ function ns.BuildMonitorTab(scroll)
     local headingSpacer = AceGUI:Create("Label")
     headingSpacer:SetText("")
     headingSpacer:SetFullWidth(true)
-    headingSpacer:SetHeight(5)
+    headingSpacer:SetHeight(3)
     scroll:AddChild(headingSpacer)
 
-    ns.UI.AddHeading(scroll, L.monitorBars)
+    AddMonitorHeading(scroll, L.monitorBars)
 
-    local selectedVisible = selectedBarID and idToIndex[selectedBarID] ~= nil
-    if not selectedVisible then
-        selectedBarID = barOrder[1]
+    local currentSpecDefaultBarID = GetDefaultBarIDForCurrentSpec(cfg, barOrder, idToIndex)
+    if currentSpecDefaultBarID then
+        selectedBarID = currentSpecDefaultBarID
+    else
+        local noSpecLabel = AceGUI:Create("Label")
+        noSpecLabel:SetText("|cffff4444" .. (L.mbNoCurrentSpecBarNotice or "注意：当前专精没有设置监控") .. "|r")
+        noSpecLabel:SetFullWidth(true)
+        if noSpecLabel.label then
+            noSpecLabel.label:SetJustifyH("CENTER")
+        end
+        scroll:AddChild(noSpecLabel)
+
+        local noSpecSpacer = AceGUI:Create("Label")
+        noSpecSpacer:SetText("")
+        noSpecSpacer:SetFullWidth(true)
+        noSpecSpacer:SetHeight(3)
+        scroll:AddChild(noSpecSpacer)
+
+        local selectedVisible = selectedBarID and idToIndex[selectedBarID] ~= nil
+        if not selectedVisible then
+            selectedBarID = barOrder[1]
+        end
     end
+    RefreshSelectedBarNotice()
 
     local barDD
     local detailHost = AceGUI:Create("SimpleGroup")
@@ -1550,8 +1965,9 @@ function ns.BuildMonitorTab(scroll)
         end
 
         local deleteSpacer = AceGUI:Create("Label")
-        deleteSpacer:SetText("\n")
+        deleteSpacer:SetText("")
         deleteSpacer:SetFullWidth(true)
+        deleteSpacer:SetHeight(3)
         detailHost:AddChild(deleteSpacer)
 
         AddDeleteButton(detailHost, barCfg, RebuildContent, barDD)
@@ -1579,8 +1995,10 @@ function ns.BuildMonitorTab(scroll)
     barDD:SetFullWidth(true)
     barDD:SetCallback("OnValueChanged", function(_, _, val)
         selectedBarID = val
+        RefreshSelectedBarNotice()
         BuildDetailSection()
     end)
+    NormalizeDropdownToFrame(barDD)
     scroll:AddChild(barDD)
     scroll:AddChild(detailHost)
     BuildDetailSection()

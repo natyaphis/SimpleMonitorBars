@@ -3,6 +3,18 @@
 local _, ns = ...
 
 local DeepCopy = ns.DeepCopy
+local SIMPLE_TEXT_ANCHORS = {
+    LEFT = true,
+    CENTER = true,
+    RIGHT = true,
+}
+
+local function NormalizeSimpleTextAnchor(value, fallback)
+    if SIMPLE_TEXT_ANCHORS[value] then
+        return value
+    end
+    return fallback
+end
 
 local function MigrateMonitorBars(profileData)
     if type(profileData.monitorBars) ~= "table" then
@@ -34,13 +46,20 @@ local function MigrateMonitorBars(profileData)
         bgColor = { 0.1, 0.1, 0.1, 0.6 },
         borderColor = { 0, 0, 0, 1 },
         showIcon = false,
-        showText = true,
-        textAlign = "RIGHT",
-        textOffsetX = -4,
+        showText = false,
+        textAlign = "CENTER",
+        textOffsetX = 0,
         textOffsetY = 0,
         fontName = "",
-        fontSize = 12,
+        fontSize = 14,
         outline = "OUTLINE",
+        showCountText = false,
+        countTextAnchor = "LEFT",
+        countTextOffsetX = 0,
+        countTextOffsetY = 0,
+        countFontName = "",
+        countFontSize = 14,
+        countOutline = "OUTLINE",
         barTexture = "Solid",
         colorThreshold = 0,
         thresholdColor = { 1.0, 1.0, 1.0, 1 },
@@ -52,9 +71,10 @@ local function MigrateMonitorBars(profileData)
         hideFromCDM = false,
         showCondition = "always",
         frameStrata = "MEDIUM",
-        textAnchor = "RIGHT",
+        textAnchor = "CENTER",
         smoothAnimation = true,
         ringThickness = 10,
+        nameAnchor = "RIGHT",
         specs = {},
     }
 
@@ -66,6 +86,10 @@ local function MigrateMonitorBars(profileData)
                     bar[k] = DeepCopy(v)
                 end
             end
+            bar.nameAnchor = NormalizeSimpleTextAnchor(bar.nameAnchor, "RIGHT")
+            bar.countTextAnchor = NormalizeSimpleTextAnchor(bar.countTextAnchor, "LEFT")
+            bar.textAnchor = NormalizeSimpleTextAnchor(bar.textAnchor or bar.textAlign, "CENTER")
+            bar.textAlign = bar.textAnchor
             if type(bar.id) ~= "number" then
                 maxID = maxID + 1
                 bar.id = maxID

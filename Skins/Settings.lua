@@ -272,6 +272,25 @@ local function ToggleSettings()
     end, FOOTER_TOP_ROW_Y)
     btnAdvanced.frame:SetFrameLevel(f:GetFrameLevel() + 3)
 
+    local selectedBarNotice = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    selectedBarNotice:SetPoint("BOTTOM", f, "BOTTOM", 0, FOOTER_TOP_ROW_Y + FOOTER_BUTTON_HEIGHT + 8)
+    selectedBarNotice:SetWidth(f:GetWidth() - (FOOTER_SIDE_INSET * 2))
+    selectedBarNotice:SetJustifyH("CENTER")
+    selectedBarNotice:SetTextColor(0, 0.8, 1, 1)
+    if btnEM.text and btnEM.text.GetFont then
+        local fontPath, fontSize, fontFlags = btnEM.text:GetFont()
+        if fontPath and fontSize then
+            selectedBarNotice:SetFont(fontPath, fontSize, fontFlags)
+        end
+    end
+
+    local function RefreshSelectedBarNotice()
+        selectedBarNotice:SetText(ns.GetSelectedMonitorBarNoticeText and ns.GetSelectedMonitorBarNoticeText() or "")
+    end
+
+    ns._refreshSelectedBarNotice = RefreshSelectedBarNotice
+    RefreshSelectedBarNotice()
+
     local btnClose = CreateFooterButton(f, CLOSE, "BOTTOMLEFT", f, "BOTTOMLEFT", FOOTER_SIDE_INSET, closeButtonWidth, function()
         CloseCatalogIfOpen()
         frame:Release()
@@ -286,6 +305,7 @@ local function ToggleSettings()
         btnLock:Release()
         btnAdvanced:Release()
         btnClose:Release()
+        ns._refreshSelectedBarNotice = nil
         widget:Release()
         ns._settingsFrame = nil
     end)
