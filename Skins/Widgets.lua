@@ -49,7 +49,7 @@ function ns.UI.OpenSpellCatalogFrame(title, sections, onManualAdd)
     local frame = AceGUI:Create("Frame")
     frame:SetTitle(title)
     frame:SetWidth(FRAME_WIDTH)
-    frame:SetHeight(500)
+    frame:SetHeight(510)
     frame:SetLayout("Fill")
     frame:EnableResize(false)
 
