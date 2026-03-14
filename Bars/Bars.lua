@@ -383,6 +383,17 @@ local function GetExactCount(barFrame, maxVal)
     return count
 end
 
+local function SetStackSegmentsValue(barFrame, value)
+    local segs = barFrame._segments
+    if not segs then
+        return
+    end
+
+    for i = 1, #segs do
+        segs[i]:SetValue(value)
+    end
+end
+
 local function GetOrCreateShadowCooldown(barFrame)
     if barFrame._shadowCooldown then return barFrame._shadowCooldown end
     local cd = CreateFrame("Cooldown", nil, barFrame, "CooldownFrameTemplate")
@@ -566,7 +577,11 @@ local function CreateSegments(barFrame, count, cfg)
         bar:SetSize(segW, totalH)
         bar:SetStatusBarTexture(texPath)
         bar:SetStatusBarColor(barColor[1], barColor[2], barColor[3], barColor[4])
-        bar:SetMinMaxValues(0, 1)
+        if cfg.barType == "stack" then
+            bar:SetMinMaxValues(i - 1, i)
+        else
+            bar:SetMinMaxValues(0, 1)
+        end
         bar:SetValue(0)
         bar:SetFrameLevel(container:GetFrameLevel() + 1)
         ConfigureStatusBar(bar)
@@ -917,7 +932,8 @@ local function FindHelpfulAuraBySpellID(unit, spellID)
         for i = 1, 255 do
             local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
             if not ok or not aura then break end
-            if aura.spellId == spellID then
+            local auraSpellID = aura.spellId
+            if auraSpellID and (not issecretvalue or not issecretvalue(auraSpellID)) and auraSpellID == spellID then
                 return aura
             end
         end
@@ -936,7 +952,8 @@ local function FindHelpfulAuraBySpellID(unit, spellID)
     if AuraUtil and AuraUtil.ForEachAura then
         local found = nil
         AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(aura)
-            if aura and aura.spellId == spellID then
+            local auraSpellID = aura and aura.spellId
+            if auraSpellID and (not issecretvalue or not issecretvalue(auraSpellID)) and auraSpellID == spellID then
                 found = aura
                 return true
             end
@@ -1003,6 +1020,37 @@ local function GetStackCountFromAuraOrFrame(auraData, cdmFrame)
     end
 
     return 0
+end
+
+local function GetAuraDataByInstanceID(auraInstanceID, preferredUnit, secondUnit)
+    if not HasAuraInstanceID(auraInstanceID) or not C_UnitAuras or not C_UnitAuras.GetAuraDataByAuraInstanceID then
+        return nil, nil
+    end
+
+    local units, exists = {}, {}
+    local function AddUnit(unit)
+        if type(unit) == "string" and unit ~= "" and not exists[unit] then
+            exists[unit] = true
+            units[#units + 1] = unit
+        end
+    end
+
+    AddUnit(preferredUnit)
+    AddUnit(secondUnit)
+    AddUnit("player")
+    AddUnit("target")
+    AddUnit("pet")
+    AddUnit("vehicle")
+    AddUnit("focus")
+
+    for _, unit in ipairs(units) do
+        local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+        if auraData then
+            return auraData, unit
+        end
+    end
+
+    return nil, nil
 end
 
 local function GetIciclesStacks()
@@ -1098,13 +1146,14 @@ UpdateStackBar = function(barFrame)
             barFrame._cdmFrame = cdmFrame
 
             if HasAuraInstanceID(cdmFrame.auraInstanceID) then
-                auraActive = true
-                local unit = cdmFrame.auraDataUnit or unitPref
-                local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, cdmFrame.auraInstanceID)
-                if not auraData then
-                    local other = (unit == "player") and "target" or "player"
-                    auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(other, cdmFrame.auraInstanceID)
+                local baseUnit = cdmFrame.auraDataUnit or unitPref or barFrame._trackedUnit or "player"
+                local auraData, trackedUnit = GetAuraDataByInstanceID(cdmFrame.auraInstanceID, baseUnit, barFrame._trackedUnit)
+                if trackedUnit then
+                    barFrame._trackedUnit = trackedUnit
+                else
+                    barFrame._trackedUnit = baseUnit
                 end
+                auraActive = auraData ~= nil
                 stacks = GetStackCountFromAuraOrFrame(auraData, cdmFrame)
                 barFrame._trackedAuraInstanceID = cdmFrame.auraInstanceID
             end
@@ -1112,13 +1161,13 @@ UpdateStackBar = function(barFrame)
     end
 
     if not isIciclesPlayer and not auraActive and HasAuraInstanceID(barFrame._trackedAuraInstanceID) then
-        local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID("player", barFrame._trackedAuraInstanceID)
-        if not auraData then
-            auraData = C_UnitAuras.GetAuraDataByAuraInstanceID("target", barFrame._trackedAuraInstanceID)
-        end
+        local auraData, trackedUnit = GetAuraDataByInstanceID(barFrame._trackedAuraInstanceID, barFrame._trackedUnit, unitPref)
         if auraData then
             auraActive = true
             stacks = GetStackCountFromAuraOrFrame(auraData, barFrame._cdmFrame)
+            if trackedUnit then
+                barFrame._trackedUnit = trackedUnit
+            end
         end
     end
 
@@ -1156,6 +1205,7 @@ UpdateStackBar = function(barFrame)
                     barFrame._lastKnownActive = false
                     barFrame._lastKnownStacks = 0
                     barFrame._trackedAuraInstanceID = nil
+                    barFrame._trackedUnit = nil
                     stacks = 0
                 end
             end
@@ -1167,25 +1217,14 @@ UpdateStackBar = function(barFrame)
     local isSecret = issecretvalue and issecretvalue(stacks)
     local rawStacks = stacks
 
-    local stacksResolved = true
+    local stacksResolved = not isSecret
     local maxStacks = cfg.maxStacks or 5
+    local stacksForColor = stacks
+    local stacksForText = stacks
     local segs = barFrame._segments
     if segs then
-
         if isSecret then
-            local lastFeed = barFrame._arcFeedFrame or 0
-            if lastFeed == frameTick then
-                stacks = barFrame._arcResolvedStacks or 0
-            elseif lastFeed > 0 then
-                stacks = GetExactCount(barFrame, maxStacks)
-            else
-                stacksResolved = false
-            end
-            FeedArcDetectors(barFrame, rawStacks, maxStacks)
-            barFrame._arcFeedFrame = frameTick
-            if stacksResolved then
-                barFrame._arcResolvedStacks = stacks
-            end
+            stacksForText = rawStacks
         else
             barFrame._arcFeedFrame = 0
             if barFrame._arcDetectors then
@@ -1196,43 +1235,51 @@ UpdateStackBar = function(barFrame)
             end
         end
 
-
-        if stacksResolved then
+        if isSecret then
+            barFrame._displayStacks = nil
+            barFrame._targetStacks = nil
+            SetStackSegmentsValue(barFrame, rawStacks)
+            FeedArcDetectors(barFrame, rawStacks, maxStacks)
+            local resolved = GetExactCount(barFrame, maxStacks)
+            if type(resolved) == "number" then
+                stacksForColor = resolved
+                stacksResolved = true
+            else
+                stacksResolved = false
+            end
+        elseif stacksResolved then
             local prevDisplay = barFrame._displayStacks
             local smooth = (cfg.smoothAnimation ~= false)
             if prevDisplay == nil or not smooth then
-
                 barFrame._displayStacks = stacks
                 barFrame._targetStacks  = stacks
-                for i = 1, #segs do
-                    segs[i]:SetValue(i <= stacks and 1 or 0)
-                end
-                ApplySegmentColors(barFrame, stacks)
+                SetStackSegmentsValue(barFrame, stacks)
             else
                 barFrame._targetStacks = stacks
                 if stacks < prevDisplay then
-
                     barFrame._displayStacks = stacks
-                    for i = 1, #segs do
-                        segs[i]:SetValue(i <= stacks and 1 or 0)
-                    end
-                    ApplySegmentColors(barFrame, stacks)
+                    SetStackSegmentsValue(barFrame, stacks)
                 end
-
             end
         end
     end
 
     if auraActive then
         barFrame._lastKnownActive = true
-        barFrame._lastKnownStacks = (not isSecret) and stacks or (barFrame._lastKnownStacks or 0)
+        if not isSecret and type(stacks) == "number" then
+            barFrame._lastKnownStacks = stacks
+        elseif stacksResolved and type(stacksForColor) == "number" then
+            barFrame._lastKnownStacks = stacksForColor
+        end
     end
 
-    if stacksResolved then
-        ApplySegmentColors(barFrame, stacks)
+    if stacksResolved and type(stacksForColor) == "number" then
+        ApplySegmentColors(barFrame, stacksForColor)
     end
 
-    if type(stacks) == "number" then
+    if isSecret then
+        SetCountText(barFrame, stacksForText)
+    elseif type(stacks) == "number" then
         SetCountText(barFrame, tostring(stacks))
     else
         ClearCountText(barFrame)
