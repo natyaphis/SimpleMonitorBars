@@ -102,4 +102,4 @@ Libs/         Embedded libraries
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+All Rights Reserved. See [LICENSE](LICENSE).
