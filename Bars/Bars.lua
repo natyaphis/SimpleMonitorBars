@@ -2212,6 +2212,7 @@ function MB:OnAuraUpdate(unit, updateInfo)
     local function RefreshStackBarForAuraUpdate(barFrame)
         if barFrame._trackedUnit == unit and WasAuraInstanceRemoved(updateInfo, barFrame._trackedAuraInstanceID) then
             MarkStackAuraRemoved(barFrame, barFrame._trackedAuraInstanceID)
+            return
         end
         UpdateStackBar(barFrame)
     end
