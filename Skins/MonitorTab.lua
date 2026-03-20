@@ -269,6 +269,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         maxDuration = 60,
         width      = 300,
         height     = 15,
+        barShape   = "Bar",
         verticalBar = false,
         reverseGrowth = false,
         posX       = 0,
@@ -304,7 +305,6 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         frameStrata     = "MEDIUM",
         textAnchor      = "CENTER",
         smoothAnimation = true,
-        ringThickness   = 10,
         showSpellName  = false,
         nameAnchor     = "RIGHT",
         nameOutline    = "OUTLINE",
@@ -800,10 +800,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     typeDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     typeDD:SetCallback("OnValueChanged", function(_, _, val)
         barCfg.barType = val
-
-        if val ~= "duration" then
-            barCfg.barShape = "Bar"
-        end
+        barCfg.barShape = "Bar"
         MB:RebuildAllBars()
         rebuildAll()
     end)
@@ -820,45 +817,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         MB:RebuildAllBars()
     end)
     typeClassRow:AddChild(classDD)
-
-    if barCfg.barType == "duration" then
-        local shapeDD = AceGUI:Create("Dropdown")
-        shapeDD:SetLabel(L.mbBarShape or "Bar Shape")
-        shapeDD:SetList({ ["Bar"] = L.mbShapeBar or "Bar", ["Ring"] = L.mbShapeRing or "Ring" }, { "Bar", "Ring" })
-        shapeDD:SetValue(barCfg.barShape or "Bar")
-        shapeDD:SetFullWidth(true)
-        shapeDD:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.barShape = val
-            MB:RebuildAllBars()
-            rebuildAll()
-        end)
-        container:AddChild(shapeDD)
-
-        if barCfg.barShape == "Ring" then
-            local sizeSlider = AceGUI:Create("Slider")
-            sizeSlider:SetLabel(L.mbRingSize or "Ring Size")
-            sizeSlider:SetSliderValues(20, 500, 1)
-            sizeSlider:SetValue(barCfg.width)
-            sizeSlider:SetFullWidth(true)
-            sizeSlider:SetCallback("OnValueChanged", function(_, _, val)
-                barCfg.width = RoundToOneDecimal(val)
-                barCfg.height = barCfg.width
-                MB:RebuildAllBars()
-            end)
-            container:AddChild(sizeSlider)
-
-            local thickDD = AceGUI:Create("Dropdown")
-            thickDD:SetLabel(L.mbRingThickness or "Ring Thickness")
-            thickDD:SetList({ [10] = "10px", [20] = "20px", [30] = "30px", [40] = "40px" }, { 10, 20, 30, 40 })
-            thickDD:SetValue(barCfg.ringThickness or 10)
-            thickDD:SetFullWidth(true)
-            thickDD:SetCallback("OnValueChanged", function(_, _, val)
-                barCfg.ringThickness = val
-                MB:RebuildAllBars()
-            end)
-            container:AddChild(thickDD)
-        end
-    end
 
     local SHOW_COND_ITEMS = {
         ["always"]          = L.mbCondAlways,
@@ -999,29 +957,27 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     styleGroup:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
     container:AddChild(styleGroup)
 
-    if barCfg.barShape ~= "Ring" then
-        local directionRow = AddTwoColumnRow(styleGroup)
+    local directionRow = AddTwoColumnRow(styleGroup)
 
-        local verticalCB = AceGUI:Create("CheckBox")
-        verticalCB:SetLabel(L.mbVerticalBar or "Vertical Monitor")
-        verticalCB:SetValue(barCfg.verticalBar == true)
-        verticalCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        verticalCB:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.verticalBar = (val == true)
-            MB:RebuildAllBars()
-        end)
-        directionRow:AddChild(verticalCB)
+    local verticalCB = AceGUI:Create("CheckBox")
+    verticalCB:SetLabel(L.mbVerticalBar or "Vertical Monitor")
+    verticalCB:SetValue(barCfg.verticalBar == true)
+    verticalCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+    verticalCB:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.verticalBar = (val == true)
+        MB:RebuildAllBars()
+    end)
+    directionRow:AddChild(verticalCB)
 
-        local reverseCB = AceGUI:Create("CheckBox")
-        reverseCB:SetLabel(L.mbReverseGrowth or "Reverse Growth")
-        reverseCB:SetValue(barCfg.reverseGrowth == true)
-        reverseCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        reverseCB:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.reverseGrowth = (val == true)
-            MB:RebuildAllBars()
-        end)
-        directionRow:AddChild(reverseCB)
-    end
+    local reverseCB = AceGUI:Create("CheckBox")
+    reverseCB:SetLabel(L.mbReverseGrowth or "Reverse Growth")
+    reverseCB:SetValue(barCfg.reverseGrowth == true)
+    reverseCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+    reverseCB:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.reverseGrowth = (val == true)
+        MB:RebuildAllBars()
+    end)
+    directionRow:AddChild(reverseCB)
 
     local strataDD = AceGUI:Create("Dropdown")
     strataDD:SetLabel(L.mbFrameStrata)
@@ -1047,31 +1003,27 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(maxSlider)
     end
 
-    if barCfg.barShape ~= "Ring" then
-        local wSlider = AceGUI:Create("Slider")
-        wSlider:SetLabel(L.mbBarWidth)
-        wSlider:SetSliderValues(5, 500, 1)
-        wSlider:SetValue(barCfg.width)
-        wSlider:SetFullWidth(true)
-        wSlider:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.width = RoundToOneDecimal(val)
-            MB:RebuildAllBars()
-        end)
-        styleGroup:AddChild(wSlider)
-    end
+    local wSlider = AceGUI:Create("Slider")
+    wSlider:SetLabel(L.mbBarWidth)
+    wSlider:SetSliderValues(5, 500, 1)
+    wSlider:SetValue(barCfg.width)
+    wSlider:SetFullWidth(true)
+    wSlider:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.width = RoundToOneDecimal(val)
+        MB:RebuildAllBars()
+    end)
+    styleGroup:AddChild(wSlider)
 
-    if barCfg.barShape ~= "Ring" then
-        local hSlider = AceGUI:Create("Slider")
-        hSlider:SetLabel(L.mbBarHeight)
-        hSlider:SetSliderValues(5, 500, 0.1)
-        hSlider:SetValue(barCfg.height)
-        hSlider:SetFullWidth(true)
-        hSlider:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.height = RoundToOneDecimal(val)
-            MB:RebuildAllBars()
-        end)
-        styleGroup:AddChild(hSlider)
-    end
+    local hSlider = AceGUI:Create("Slider")
+    hSlider:SetLabel(L.mbBarHeight)
+    hSlider:SetSliderValues(5, 500, 0.1)
+    hSlider:SetValue(barCfg.height)
+    hSlider:SetFullWidth(true)
+    hSlider:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.height = RoundToOneDecimal(val)
+        MB:RebuildAllBars()
+    end)
+    styleGroup:AddChild(hSlider)
 
     local syncingPositionSliders = false
 
@@ -1113,22 +1065,20 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     AddMonitorHeading(styleGroup, "材质染色")
 
     local hasTextureDropdown = false
-    if barCfg.barShape ~= "Ring" then
-        local texItems, texOrder = GetTextureItems()
-        if next(texItems) then
-            hasTextureDropdown = true
-            local texDD = AceGUI:Create("Dropdown")
-            texDD:SetLabel(L.mbBarTexture)
-            texDD:SetList(texItems, texOrder, TEXTURE_DROPDOWN_ITEM_TYPE)
-            EnhanceTextureDropdown(texDD)
-            texDD:SetValue(barCfg.barTexture or "Solid")
-            texDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-            texDD:SetCallback("OnValueChanged", function(_, _, val)
-                barCfg.barTexture = val
-                MB:RebuildAllBars()
-            end)
-            styleGroup:AddChild(texDD)
-        end
+    local texItems, texOrder = GetTextureItems()
+    if next(texItems) then
+        hasTextureDropdown = true
+        local texDD = AceGUI:Create("Dropdown")
+        texDD:SetLabel(L.mbBarTexture)
+        texDD:SetList(texItems, texOrder, TEXTURE_DROPDOWN_ITEM_TYPE)
+        EnhanceTextureDropdown(texDD)
+        texDD:SetValue(barCfg.barTexture or "Solid")
+        texDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        texDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.barTexture = val
+            MB:RebuildAllBars()
+        end)
+        styleGroup:AddChild(texDD)
     end
 
     local barColorPicker = AceGUI:Create("ColorPicker")
@@ -1318,17 +1268,15 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     nameCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     skillToggleRow:AddChild(nameCB)
 
-    if barCfg.barShape ~= "Ring" then
-        local iconCB = AceGUI:Create("CheckBox")
-        iconCB:SetLabel(L.mbShowIcon)
-        iconCB:SetValue(barCfg.showIcon ~= false)
-        iconCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        iconCB:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.showIcon = val
-            Refresh()
-        end)
-        skillToggleRow:AddChild(iconCB)
-    end
+    local iconCB = AceGUI:Create("CheckBox")
+    iconCB:SetLabel(L.mbShowIcon)
+    iconCB:SetValue(barCfg.showIcon ~= false)
+    iconCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+    iconCB:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.showIcon = val
+        Refresh()
+    end)
+    skillToggleRow:AddChild(iconCB)
 
     local nameRow = AddTwoColumnRow(styleGroup)
 

@@ -7,13 +7,7 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 local BAR_TEXTURE  = ns._mbConst.BAR_TEXTURE
 local SEGMENT_GAP  = ns._mbConst.SEGMENT_GAP
 local UPDATE_INTERVAL = ns._mbConst.UPDATE_INTERVAL
-local MEDIA_PATH = "Interface\\AddOns\\SimpleMonitorBars\\Media\\"
-local RING_TEXTURE_MAP = {
-    [10] = MEDIA_PATH .. "circle1.tga",
-    [20] = MEDIA_PATH .. "circle2.tga",
-    [30] = MEDIA_PATH .. "circle3.tga",
-    [40] = MEDIA_PATH .. "circle4.tga",
-}
+local COVER_TEXTURE = "Interface\\AddOns\\SimpleMonitorBars\\Media\\cover.png"
 
 local ResolveFontPath    = MB.ResolveFontPath
 local ConfigureStatusBar = MB.ConfigureStatusBar
@@ -131,13 +125,6 @@ local function IsSkyriding()
     end
     local _, canGlide = C_PlayerInfo.GetGlidingInfo()
     return canGlide == true
-end
-
-local function GetRingTextureByThickness(thickness)
-    if thickness <= 10 then return RING_TEXTURE_MAP[10] end
-    if thickness <= 20 then return RING_TEXTURE_MAP[20] end
-    if thickness <= 30 then return RING_TEXTURE_MAP[30] end
-    return RING_TEXTURE_MAP[40]
 end
 
 local function NormalizeMaskAndBorderStyle(styleName)
@@ -480,7 +467,7 @@ function MB.ApplyMaskAndBorderSettings(barFrame, cfg)
     local width, height = barFrame:GetSize()
     
     if barFrame._mask then
-        barFrame._mask:SetTexture(MEDIA_PATH .. "cover.png")
+        barFrame._mask:SetTexture(COVER_TEXTURE)
         barFrame._mask:SetAllPoints(barFrame)
     end
 
@@ -588,42 +575,6 @@ local function CreateSegments(barFrame, count, cfg)
         texPath = LSM:Fetch("statusbar", cfg.barTexture) or BAR_TEXTURE
     end
 
-
-    if cfg.barShape == "Ring" and cfg.barType == "duration" then
-        local thickness = cfg.ringThickness or 20
-        local ringTex = GetRingTextureByThickness(thickness)
-
-        local bg = container:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints()
-        bg:SetTexture(ringTex)
-        bg:SetVertexColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4])
-        bg:Show()
-        barFrame._segBGs[1] = bg
-
-
-
-
-
-        local cd = CreateFrame("Cooldown", nil, container, "CooldownFrameTemplate")
-        cd:SetAllPoints()
-        cd:SetDrawEdge(false)
-        cd:SetDrawBling(false)
-        cd:SetSwipeTexture(ringTex)
-        cd:SetSwipeColor(barColor[1], barColor[2], barColor[3], barColor[4])
-        cd:SetHideCountdownNumbers(true)
-        cd:SetUseCircularEdge(false)
-        cd:Show()
-        
-
-        cd._isRing = true
-        barFrame._segments[1] = cd
-        
-
-        if barFrame._mbBorder then barFrame._mbBorder:Hide() end
-        if barFrame._borderFrame then barFrame._borderFrame:Hide() end
-        
-        return
-    end
 
     for i = 1, count do
         local offset = (i - 1) * (segSize + gap)
@@ -766,7 +717,7 @@ function MB:CreateBarFrame(barCfg)
 
     f._mask = f:CreateMaskTexture()
     f._mask:SetAllPoints()
-    f._mask:SetTexture(MEDIA_PATH .. "cover.png")
+    f._mask:SetTexture(COVER_TEXTURE)
     f.bg:AddMaskTexture(f._mask)
 
 
@@ -842,10 +793,6 @@ function MB:GetSize(barFrame)
     local scale = cfg.scale or 1
     local height = cfg.height
     
-    if cfg.barShape == "Ring" and cfg.barType == "duration" then
-        height = width
-    end
-    
     return MB.getNearestPixel(width, scale), MB.getNearestPixel(height, scale)
 end
 
@@ -853,7 +800,6 @@ function MB:ApplyStyle(barFrame)
     local cfg = barFrame._cfg
     if not cfg then return end
 
-    local isRing = (cfg.barShape == "Ring" and cfg.barType == "duration")
     local width, height = self:GetSize(barFrame)
     barFrame:SetSize(width, height)
 
@@ -901,25 +847,11 @@ function MB:ApplyStyle(barFrame)
     barFrame.bg:SetColorTexture(bgc[1], bgc[2], bgc[3], bgc[4])
 
     local iconSize = height
-    if isRing then iconSize = height * 0.7 end
     barFrame._icon:SetSize(iconSize, iconSize)
     
     local showIcon = cfg.showIcon ~= false
-    if isRing then showIcon = false end
     barFrame._icon:SetShown(showIcon)
-
-
-    if isRing and showIcon then
-        if not barFrame._iconMask then
-             barFrame._iconMask = barFrame:CreateMaskTexture()
-             barFrame._iconMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
-             barFrame._iconMask:SetAllPoints(barFrame._icon)
-             barFrame._icon:AddMaskTexture(barFrame._iconMask)
-        end
-        barFrame._iconMask:Show()
-    else
-        if barFrame._iconMask then barFrame._iconMask:Hide() end
-    end
+    if barFrame._iconMask then barFrame._iconMask:Hide() end
 
 
     if cfg.showSpellName then
@@ -943,25 +875,14 @@ function MB:ApplyStyle(barFrame)
         if barFrame._nameText then barFrame._nameText:Hide() end
     end
 
-    if isRing then
-        barFrame._icon:ClearAllPoints()
-        barFrame._icon:SetPoint("CENTER", barFrame, "CENTER", 0, 0)
-        
-        barFrame._segContainer:ClearAllPoints()
-        barFrame._segContainer:SetAllPoints(barFrame)
-        
+    barFrame._icon:ClearAllPoints()
+    barFrame._icon:SetPoint("LEFT", barFrame, "LEFT", 0, 0)
+    barFrame.bg:Show()
 
-        barFrame.bg:Hide()
-    else
-        barFrame._icon:ClearAllPoints()
-        barFrame._icon:SetPoint("LEFT", barFrame, "LEFT", 0, 0)
-        barFrame.bg:Show()
-
-        local segOffset = showIcon and (iconSize + 2) or 0
-        barFrame._segContainer:ClearAllPoints()
-        barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
-        barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", 0, 0)
-    end
+    local segOffset = showIcon and (iconSize + 2) or 0
+    barFrame._segContainer:ClearAllPoints()
+    barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
+    barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", 0, 0)
 
     local count
     if cfg.barType == "charge" then
@@ -992,7 +913,7 @@ function MB:ApplyStyle(barFrame)
         barFrame._countText:SetText("")
     end
 
-    if cfg.borderStyle == "whole" and not isRing then
+    if cfg.borderStyle == "whole" then
         MB.ApplyMaskAndBorderSettings(barFrame, cfg)
     elseif barFrame._borderFrame then
         barFrame._borderFrame:Hide()
@@ -1891,43 +1812,19 @@ local function UpdateDurationBar(barFrame)
             end
             local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
             if durObj then
+                seg:SetMinMaxValues(0, 1)
+                local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
+                local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 0
 
-                if seg._isRing then
-
-                    if barFrame._needsDurationRefresh then
-
-                        if seg.SetCooldownFromDurationObject then
-                             seg:SetCooldownFromDurationObject(durObj)
-                        else
-
-                             local start = durObj:GetCooldownStartTime()
-                             local duration = durObj:GetCooldownDuration()
-                             seg:SetCooldown(start, duration)
-                        end
-                        barFrame._needsDurationRefresh = false
-                    end
-                else
-
-                    seg:SetMinMaxValues(0, 1)
-                    local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
-                    local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 0
-
-                    if seg.SetTimerDuration then
-                        seg:SetTimerDuration(durObj, interpolation, direction)
-                        if seg.SetToTargetValue then
-                            seg:SetToTargetValue()
-                        end
+                if seg.SetTimerDuration then
+                    seg:SetTimerDuration(durObj, interpolation, direction)
+                    if seg.SetToTargetValue then
+                        seg:SetToTargetValue()
                     end
                 end
-
-
 
                 local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
-                if seg._isRing then
-                    seg:SetSwipeColor(c[1], c[2], c[3], c[4])
-                else
-                    seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
-                end
+                seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
 
 
                 if cfg.showText ~= false and barFrame._text then
@@ -1954,17 +1851,8 @@ local function UpdateDurationBar(barFrame)
         end)
 
         if not timerOK then
-
-            if seg._isRing then
-                if barFrame._needsDurationRefresh then
-
-                    seg:SetCooldown(GetTime(), 3600) 
-                    barFrame._needsDurationRefresh = false
-                end
-            else
-                seg:SetMinMaxValues(0, 1)
-                seg:SetValue(1)
-            end
+            seg:SetMinMaxValues(0, 1)
+            seg:SetValue(1)
 
             if cfg.showText ~= false and barFrame._text then
                 barFrame._text:SetText("")
@@ -1976,15 +1864,8 @@ local function UpdateDurationBar(barFrame)
         barFrame._trackedAuraInstanceID = nil
         barFrame._trackedUnit = nil
 
-        if seg._isRing then
-            if barFrame._needsDurationRefresh then
-                seg:SetCooldown(0, 0)
-                barFrame._needsDurationRefresh = false
-            end
-        else
-            seg:SetMinMaxValues(0, 1)
-            seg:SetValue(0)
-        end
+        seg:SetMinMaxValues(0, 1)
+        seg:SetValue(0)
 
         if cfg.showText ~= false and barFrame._text then
             barFrame._text:SetText("")

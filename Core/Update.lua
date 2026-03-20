@@ -41,6 +41,7 @@ local function MigrateMonitorBars(profileData)
         maxDuration = 60,
         width = 200,
         height = 20,
+        barShape = "Bar",
         posX = 0,
         posY = 0,
         barColor = { 0.4, 0.75, 1.0, 1 },
@@ -74,7 +75,6 @@ local function MigrateMonitorBars(profileData)
         frameStrata = "MEDIUM",
         textAnchor = "CENTER",
         smoothAnimation = true,
-        ringThickness = 10,
         nameAnchor = "RIGHT",
         specs = {},
     }
@@ -91,6 +91,8 @@ local function MigrateMonitorBars(profileData)
             bar.countTextAnchor = NormalizeSimpleTextAnchor(bar.countTextAnchor, "LEFT")
             bar.textAnchor = NormalizeSimpleTextAnchor(bar.textAnchor or bar.textAlign, "CENTER")
             bar.textAlign = bar.textAnchor
+            bar.barShape = "Bar"
+            bar.ringThickness = nil
             if type(bar.id) ~= "number" then
                 maxID = maxID + 1
                 bar.id = maxID

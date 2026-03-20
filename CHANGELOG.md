@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.4
+
+Changes since 1.3.3:
+
+- Updated `Bars/Bars.lua`
+- Updated `Core/Update.lua`
+- Updated `Locales/enUS.lua`
+- Updated `Locales/koKR.lua`
+- Updated `Locales/ruRU.lua`
+- Updated `Locales/zhCN.lua`
+- Updated `Locales/zhTW.lua`
+- Removed `Media/circle1.tga`
+- Removed `Media/circle2.tga`
+- Removed `Media/circle3.tga`
+- Removed `Media/circle4.tga`
+- Updated `Skins/MonitorTab.lua`
+
 ## 1.3.3
 
 Changes since 1.3.2:
