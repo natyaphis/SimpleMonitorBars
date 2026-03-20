@@ -429,6 +429,20 @@ local function SetStackSegmentsValue(barFrame, value)
     end
 end
 
+local function ResetStackAnimationState(barFrame, value)
+    if not barFrame then
+        return
+    end
+
+    local resolvedValue = tonumber(value) or 0
+    if resolvedValue < 0 then
+        resolvedValue = 0
+    end
+
+    barFrame._displayStacks = resolvedValue
+    barFrame._targetStacks = resolvedValue
+end
+
 local function GetOrCreateShadowCooldown(barFrame)
     if barFrame._shadowCooldown then return barFrame._shadowCooldown end
     local cd = CreateFrame("Cooldown", nil, barFrame, "CooldownFrameTemplate")
@@ -1315,6 +1329,7 @@ UpdateStackBar = function(barFrame)
                 barFrame._lastKnownStacks = 0
                 barFrame._trackedAuraInstanceID = nil
                 barFrame._nilCount = 0
+                ResetStackAnimationState(barFrame, 0)
                 stacks = 0
             else
                 stacks = barFrame._lastKnownStacks or 0
@@ -1353,7 +1368,10 @@ UpdateStackBar = function(barFrame)
             end
         end
 
-        if isSecret then
+        if isIciclesPlayer and not isSecret then
+            ResetStackAnimationState(barFrame, stacks)
+            SetStackSegmentsValue(barFrame, stacks)
+        elseif isSecret then
             barFrame._displayStacks = nil
             barFrame._targetStacks = nil
             SetStackSegmentsValue(barFrame, rawStacks)
@@ -2196,6 +2214,7 @@ function MB:OnCombatLeave()
         f._isChargeSpell = nil
         if f._cfg and f._cfg.barType == "stack" then
             f._arcFeedFrame = 0
+            ResetStackAnimationState(f, 0)
             if f._arcDetectors then
                 for _, det in pairs(f._arcDetectors) do
                     det:SetValue(0)
