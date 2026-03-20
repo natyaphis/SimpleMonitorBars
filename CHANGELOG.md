@@ -2,15 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## 1.3.5
-
-Changes since 1.3.4:
-
-- Updated `Bars/Bars.lua`
-
 ## Unreleased
 
-- Maintenance update
+- Maintenance update.
+
+## 1.3.5
+
+- Reworked linear duration bars to follow the vflow-style timer path now that ring monitors are gone, and kept the default behavior draining from full to empty.
+- Preserved the reverse-growth option for duration bars while separating it from the standard status bar reverse-fill handling used by other bar types.
 
 ## 1.3.4
 
