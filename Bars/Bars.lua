@@ -47,6 +47,34 @@ local function ResolveBarTexturePath(textureName)
     return BAR_TEXTURE
 end
 
+local function IsVerticalBar(cfg)
+    return cfg and cfg.verticalBar == true
+end
+
+local function IsReverseGrowth(cfg)
+    return cfg and cfg.reverseGrowth == true
+end
+
+local function ConfigureLinearStatusBar(bar, cfg)
+    if not bar then
+        return
+    end
+
+    local isVertical = IsVerticalBar(cfg)
+    if bar.SetOrientation then
+        bar:SetOrientation(isVertical and "VERTICAL" or "HORIZONTAL")
+    end
+    if bar.SetRotatesTexture then
+        bar:SetRotatesTexture(isVertical)
+    end
+    if bar.SetReverseFill then
+        bar:SetReverseFill(IsReverseGrowth(cfg))
+    end
+    if bar.GetStatusBarTexture then
+        ConfigureStatusBar(bar)
+    end
+end
+
 function MB.rounded(num, idp)
     if not num then return num end
     local mult = 10^(idp or 0)
@@ -530,11 +558,14 @@ local function CreateSegments(barFrame, count, cfg)
     local totalW = container:GetWidth()
     local totalH = container:GetHeight()
     local gap = cfg.segmentGap ~= nil and cfg.segmentGap or SEGMENT_GAP
+    local isVertical = IsVerticalBar(cfg)
+    local isReverse = IsReverseGrowth(cfg)
     local styleName = NormalizeMaskAndBorderStyle(cfg.maskAndBorderStyle)
     local style = MB.MASK_AND_BORDER_STYLES[styleName] or MB.MASK_AND_BORDER_STYLES["1"]
     local borderSize = style.thickness or 0
     local perSegBorder = (cfg.borderStyle == "segment")
-    local segW = (totalW - (count - 1) * gap) / count
+    local primarySize = isVertical and totalH or totalW
+    local segSize = (primarySize - (count - 1) * gap) / count
     local barColor = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
     local bgColor = cfg.bgColor or { 0.1, 0.1, 0.1, 0.6 }
     local borderColor = cfg.borderColor or { 0, 0, 0, 1 }
@@ -581,20 +612,47 @@ local function CreateSegments(barFrame, count, cfg)
     end
 
     for i = 1, count do
-        local xOff = (i - 1) * (segW + gap)
+        local offset = (i - 1) * (segSize + gap)
 
         local bg = container:CreateTexture(nil, "BACKGROUND")
         bg:ClearAllPoints()
-        bg:SetPoint("TOPLEFT", container, "TOPLEFT", xOff, 0)
-        bg:SetSize(segW, totalH)
+        if isVertical then
+            if isReverse then
+                bg:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -offset)
+            else
+                bg:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, offset)
+            end
+            bg:SetSize(totalW, segSize)
+        else
+            if isReverse then
+                bg:SetPoint("TOPRIGHT", container, "TOPRIGHT", -offset, 0)
+            else
+                bg:SetPoint("TOPLEFT", container, "TOPLEFT", offset, 0)
+            end
+            bg:SetSize(segSize, totalH)
+        end
         bg:SetColorTexture(bgColor[1], bgColor[2], bgColor[3], bgColor[4])
         if barFrame._mask then bg:AddMaskTexture(barFrame._mask) end
         bg:Show()
         barFrame._segBGs[i] = bg
 
         local bar = CreateFrame("StatusBar", nil, container)
-        bar:SetPoint("TOPLEFT", container, "TOPLEFT", xOff, 0)
-        bar:SetSize(segW, totalH)
+        bar:ClearAllPoints()
+        if isVertical then
+            if isReverse then
+                bar:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -offset)
+            else
+                bar:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, offset)
+            end
+            bar:SetSize(totalW, segSize)
+        else
+            if isReverse then
+                bar:SetPoint("TOPRIGHT", container, "TOPRIGHT", -offset, 0)
+            else
+                bar:SetPoint("TOPLEFT", container, "TOPLEFT", offset, 0)
+            end
+            bar:SetSize(segSize, totalH)
+        end
         bar:SetStatusBarTexture(texPath)
         bar:SetStatusBarColor(barColor[1], barColor[2], barColor[3], barColor[4])
         if cfg.barType == "stack" then
@@ -604,7 +662,7 @@ local function CreateSegments(barFrame, count, cfg)
         end
         bar:SetValue(0)
         bar:SetFrameLevel(container:GetFrameLevel() + 1)
-        ConfigureStatusBar(bar)
+        ConfigureLinearStatusBar(bar, cfg)
         
         if barFrame._mask then
             bar:GetStatusBarTexture():AddMaskTexture(barFrame._mask)
@@ -799,15 +857,18 @@ function MB:ApplyStyle(barFrame)
         for _, seg in ipairs(barFrame._segments) do
             seg:SetFrameStrata(strata)
             seg:SetFrameLevel(baseLevel + 2)
+            ConfigureLinearStatusBar(seg, cfg)
         end
     end
     if barFrame._chargeBar then
         barFrame._chargeBar:SetFrameStrata(strata)
         barFrame._chargeBar:SetFrameLevel(baseLevel + 2)
+        ConfigureLinearStatusBar(barFrame._chargeBar, cfg)
     end
     if barFrame._refreshCharge then
         barFrame._refreshCharge:SetFrameStrata(strata)
         barFrame._refreshCharge:SetFrameLevel(baseLevel + 3)
+        ConfigureLinearStatusBar(barFrame._refreshCharge, cfg)
     end
     if barFrame._segBorders then
         for _, border in ipairs(barFrame._segBorders) do
@@ -1543,11 +1604,12 @@ local function UpdateChargeBar(barFrame)
         local chargeBar = CreateFrame("StatusBar", nil, barFrame._segContainer)
         chargeBar:SetFrameLevel(barFrame._segContainer:GetFrameLevel() + 1)
         chargeBar:SetAllPoints(barFrame._segContainer)
-        ConfigureStatusBar(chargeBar)
+        ConfigureLinearStatusBar(chargeBar, cfg)
         barFrame._chargeBar = chargeBar
     end
     barFrame._chargeBar:SetStatusBarTexture(ResolveBarTexturePath(cfg.barTexture))
     barFrame._chargeBar:SetAllPoints(barFrame._segContainer)
+    ConfigureLinearStatusBar(barFrame._chargeBar, cfg)
     if barFrame._mask and barFrame._chargeBar:GetStatusBarTexture() and not barFrame._chargeBar._masked then
         barFrame._chargeBar:GetStatusBarTexture():AddMaskTexture(barFrame._mask)
         barFrame._chargeBar._masked = true
@@ -1561,11 +1623,11 @@ local function UpdateChargeBar(barFrame)
     if not barFrame._refreshCharge then
         local refreshCharge = CreateFrame("StatusBar", nil, barFrame._segContainer)
         refreshCharge:SetFrameLevel(barFrame._segContainer:GetFrameLevel() + 2)
-        refreshCharge:SetPoint("LEFT", barFrame._chargeBar:GetStatusBarTexture(), "RIGHT")
-        ConfigureStatusBar(refreshCharge)
+        ConfigureLinearStatusBar(refreshCharge, cfg)
         barFrame._refreshCharge = refreshCharge
     end
     barFrame._refreshCharge:SetStatusBarTexture(ResolveBarTexturePath(cfg.barTexture))
+    ConfigureLinearStatusBar(barFrame._refreshCharge, cfg)
     if barFrame._mask and barFrame._refreshCharge:GetStatusBarTexture() and not barFrame._refreshCharge._masked then
         barFrame._refreshCharge:GetStatusBarTexture():AddMaskTexture(barFrame._mask)
         barFrame._refreshCharge._masked = true
@@ -1597,9 +1659,28 @@ local function UpdateChargeBar(barFrame)
 
     local totalW = barFrame._segContainer:GetWidth()
     local totalH = barFrame._segContainer:GetHeight()
+    local isVertical = IsVerticalBar(cfg)
+    local isReverse = IsReverseGrowth(cfg)
     if totalW > 0 and totalH > 0 then
-        local chargeWidth = totalW / maxCharges
-        barFrame._refreshCharge:SetSize(chargeWidth, totalH)
+        local segmentSize = (isVertical and totalH or totalW) / maxCharges
+        barFrame._refreshCharge:ClearAllPoints()
+        if isVertical then
+            barFrame._refreshCharge:SetWidth(totalW)
+            barFrame._refreshCharge:SetHeight(segmentSize)
+            if isReverse then
+                barFrame._refreshCharge:SetPoint("TOP", barFrame._chargeBar:GetStatusBarTexture(), "BOTTOM")
+            else
+                barFrame._refreshCharge:SetPoint("BOTTOM", barFrame._chargeBar:GetStatusBarTexture(), "TOP")
+            end
+        else
+            barFrame._refreshCharge:SetWidth(segmentSize)
+            barFrame._refreshCharge:SetHeight(totalH)
+            if isReverse then
+                barFrame._refreshCharge:SetPoint("RIGHT", barFrame._chargeBar:GetStatusBarTexture(), "LEFT")
+            else
+                barFrame._refreshCharge:SetPoint("LEFT", barFrame._chargeBar:GetStatusBarTexture(), "RIGHT")
+            end
+        end
     end
 
     local rechargeColor = cfg.rechargeColor or cfg.barColor or { 0.4, 0.75, 1.0, 1 }
@@ -1633,7 +1714,7 @@ local function UpdateChargeBar(barFrame)
         end
 
         local gap = tonumber(cfg.segmentGap) or 0
-        local segW = (totalW - (maxCharges - 1) * gap) / maxCharges
+        local segSize = ((isVertical and totalH or totalW) - (maxCharges - 1) * gap) / maxCharges
         local borderColor = cfg.borderColor or { 0, 0, 0, 1 }
         for i = 1, maxCharges do
             if not barFrame._chargeBorders[i] then
@@ -1642,10 +1723,25 @@ local function UpdateChargeBar(barFrame)
                 barFrame._chargeBorders[i] = border
             end
             local border = barFrame._chargeBorders[i]
-            local xOff = (i - 1) * (segW + gap)
+            local offset = (i - 1) * (segSize + gap)
             border:ClearAllPoints()
-            border:SetPoint("TOPLEFT", barFrame._segContainer, "TOPLEFT", xOff - borderThickness, borderThickness)
-            border:SetPoint("BOTTOMRIGHT", barFrame._segContainer, "TOPLEFT", xOff + segW + borderThickness, -totalH - borderThickness)
+            if isVertical then
+                if isReverse then
+                    border:SetPoint("TOPLEFT", barFrame._segContainer, "TOPLEFT", -borderThickness, -offset + borderThickness)
+                    border:SetPoint("BOTTOMRIGHT", barFrame._segContainer, "TOPRIGHT", borderThickness, -(offset + segSize + borderThickness))
+                else
+                    border:SetPoint("BOTTOMLEFT", barFrame._segContainer, "BOTTOMLEFT", -borderThickness, offset - borderThickness)
+                    border:SetPoint("TOPRIGHT", barFrame._segContainer, "BOTTOMRIGHT", borderThickness, offset + segSize + borderThickness)
+                end
+            else
+                if isReverse then
+                    border:SetPoint("TOPRIGHT", barFrame._segContainer, "TOPRIGHT", -offset + borderThickness, borderThickness)
+                    border:SetPoint("BOTTOMLEFT", barFrame._segContainer, "TOPRIGHT", -(offset + segSize + borderThickness), -totalH - borderThickness)
+                else
+                    border:SetPoint("TOPLEFT", barFrame._segContainer, "TOPLEFT", offset - borderThickness, borderThickness)
+                    border:SetPoint("BOTTOMRIGHT", barFrame._segContainer, "TOPLEFT", offset + segSize + borderThickness, -totalH - borderThickness)
+                end
+            end
             border:SetBackdrop({
                 edgeFile = "Interface\\BUTTONS\\WHITE8X8",
                 edgeSize = borderThickness,

@@ -269,6 +269,8 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         maxDuration = 60,
         width      = 300,
         height     = 15,
+        verticalBar = false,
+        reverseGrowth = false,
         posX       = 0,
         posY       = 0,
         barColor    = { 0.4, 0.75, 1.0, 1 },
@@ -637,6 +639,8 @@ end
 local function BuildBarConfig(container, barCfg, rebuildAll)
     barCfg.width = tonumber(barCfg.width) or 300
     barCfg.height = tonumber(barCfg.height) or 15
+    barCfg.verticalBar = (barCfg.verticalBar == true)
+    barCfg.reverseGrowth = (barCfg.reverseGrowth == true)
     barCfg.posX = tonumber(barCfg.posX) or 0
     barCfg.posY = tonumber(barCfg.posY) or 0
 
@@ -995,6 +999,30 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     styleGroup:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
     container:AddChild(styleGroup)
 
+    if barCfg.barShape ~= "Ring" then
+        local directionRow = AddTwoColumnRow(styleGroup)
+
+        local verticalCB = AceGUI:Create("CheckBox")
+        verticalCB:SetLabel(L.mbVerticalBar or "Vertical Monitor")
+        verticalCB:SetValue(barCfg.verticalBar == true)
+        verticalCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        verticalCB:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.verticalBar = (val == true)
+            MB:RebuildAllBars()
+        end)
+        directionRow:AddChild(verticalCB)
+
+        local reverseCB = AceGUI:Create("CheckBox")
+        reverseCB:SetLabel(L.mbReverseGrowth or "Reverse Growth")
+        reverseCB:SetValue(barCfg.reverseGrowth == true)
+        reverseCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        reverseCB:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.reverseGrowth = (val == true)
+            MB:RebuildAllBars()
+        end)
+        directionRow:AddChild(reverseCB)
+    end
+
     local strataDD = AceGUI:Create("Dropdown")
     strataDD:SetLabel(L.mbFrameStrata)
     strataDD:SetList(STRATA_ITEMS, STRATA_ORDER)
@@ -1022,7 +1050,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     if barCfg.barShape ~= "Ring" then
         local wSlider = AceGUI:Create("Slider")
         wSlider:SetLabel(L.mbBarWidth)
-        wSlider:SetSliderValues(20, 500, 1)
+        wSlider:SetSliderValues(5, 500, 1)
         wSlider:SetValue(barCfg.width)
         wSlider:SetFullWidth(true)
         wSlider:SetCallback("OnValueChanged", function(_, _, val)
@@ -1035,7 +1063,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     if barCfg.barShape ~= "Ring" then
         local hSlider = AceGUI:Create("Slider")
         hSlider:SetLabel(L.mbBarHeight)
-        hSlider:SetSliderValues(6, 60, 0.1)
+        hSlider:SetSliderValues(5, 500, 0.1)
         hSlider:SetValue(barCfg.height)
         hSlider:SetFullWidth(true)
         hSlider:SetCallback("OnValueChanged", function(_, _, val)
@@ -1924,8 +1952,11 @@ function ns.BuildMonitorTab(scroll)
 
     AddMonitorHeading(scroll, L.monitorBars)
 
+    local selectedVisible = selectedBarID and idToIndex[selectedBarID] ~= nil
     local currentSpecDefaultBarID = GetDefaultBarIDForCurrentSpec(cfg, barOrder, idToIndex)
-    if currentSpecDefaultBarID then
+    if selectedVisible then
+        -- Keep the user's current selection, including a bar that was just added.
+    elseif currentSpecDefaultBarID then
         selectedBarID = currentSpecDefaultBarID
     else
         local noSpecLabel = AceGUI:Create("Label")
@@ -1942,7 +1973,6 @@ function ns.BuildMonitorTab(scroll)
         noSpecSpacer:SetHeight(3)
         scroll:AddChild(noSpecSpacer)
 
-        local selectedVisible = selectedBarID and idToIndex[selectedBarID] ~= nil
         if not selectedVisible then
             selectedBarID = barOrder[1]
         end
