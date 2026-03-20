@@ -61,12 +61,33 @@ local function ConfigureLinearStatusBar(bar, cfg)
     if bar.SetRotatesTexture then
         bar:SetRotatesTexture(isVertical)
     end
-    if bar.SetReverseFill then
+    if bar.SetReverseFill and cfg.barType ~= "duration" then
         bar:SetReverseFill(IsReverseGrowth(cfg))
     end
     if bar.GetStatusBarTexture then
         ConfigureStatusBar(bar)
     end
+end
+
+local function GetDurationTimerDirection(cfg)
+    if IsReverseGrowth(cfg) then
+        return Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.ElapsedTime or 0
+    end
+    return Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 1
+end
+
+local function ApplyDurationTimer(seg, durObj, cfg)
+    if not (seg and durObj and seg.SetTimerDuration) then
+        return false
+    end
+    local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
+    local direction = GetDurationTimerDirection(cfg)
+    seg:SetMinMaxValues(0, 1)
+    seg:SetTimerDuration(durObj, interpolation, direction)
+    if seg.SetToTargetValue then
+        seg:SetToTargetValue()
+    end
+    return true
 end
 
 function MB.rounded(num, idp)
@@ -1731,7 +1752,6 @@ local function UpdateDurationBar(barFrame)
     local cdmFrame = nil
     local auraInstanceID = nil
     local unit = nil
-    local auraCount = nil
 
     if cooldownID then
         cdmFrame = FindCDMFrame(cooldownID)
@@ -1743,7 +1763,6 @@ local function UpdateDurationBar(barFrame)
                 auraActive = true
                 auraInstanceID = cdmFrame.auraInstanceID
                 unit = cdmFrame.auraDataUnit or cfg.unit or "player"
-                auraCount = ExtractAuraCount(cdmFrame.auraData)
                 barFrame._trackedAuraInstanceID = auraInstanceID
                 barFrame._trackedUnit = unit
             end
@@ -1764,7 +1783,6 @@ local function UpdateDurationBar(barFrame)
             auraActive = true
             auraInstanceID = barFrame._trackedAuraInstanceID
             barFrame._trackedUnit = unit
-            auraCount = ExtractAuraCount(auraData)
         end
     end
 
@@ -1776,7 +1794,6 @@ local function UpdateDurationBar(barFrame)
             auraActive = true
             auraInstanceID = auraData.auraInstanceID
             unit = primaryUnit
-            auraCount = ExtractAuraCount(auraData)
             barFrame._trackedAuraInstanceID = auraData.auraInstanceID
             barFrame._trackedUnit = primaryUnit
         else
@@ -1786,7 +1803,6 @@ local function UpdateDurationBar(barFrame)
                 auraActive = true
                 auraInstanceID = auraData.auraInstanceID
                 unit = other
-                auraCount = ExtractAuraCount(auraData)
                 barFrame._trackedAuraInstanceID = auraData.auraInstanceID
                 barFrame._trackedUnit = other
             end
@@ -1806,21 +1822,11 @@ local function UpdateDurationBar(barFrame)
     if auraActive and auraInstanceID and unit then
 
         local timerOK = pcall(function()
-            if auraCount == nil then
-                local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraInstanceID)
-                auraCount = ExtractAuraCount(auraData)
-            end
             local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
             if durObj then
-                seg:SetMinMaxValues(0, 1)
-                local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
-                local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 0
-
-                if seg.SetTimerDuration then
-                    seg:SetTimerDuration(durObj, interpolation, direction)
-                    if seg.SetToTargetValue then
-                        seg:SetToTargetValue()
-                    end
+                if not ApplyDurationTimer(seg, durObj, cfg) then
+                    seg:SetMinMaxValues(0, 1)
+                    seg:SetValue(1)
                 end
 
                 local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
@@ -1837,11 +1843,7 @@ local function UpdateDurationBar(barFrame)
                         barFrame._text:SetText(remaining)
                     end
                 end
-                if auraCount then
-                    SetCountText(barFrame, tostring(auraCount))
-                else
-                    ClearCountText(barFrame)
-                end
+                ClearCountText(barFrame)
             else
                 if cfg.showText ~= false and barFrame._text then
                     barFrame._text:SetText("")
