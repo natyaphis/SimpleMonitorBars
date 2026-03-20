@@ -718,6 +718,7 @@ function MB:CreateBarFrame(barCfg)
     f._segContainer:SetPoint("TOPLEFT", f, "TOPLEFT", segOffset, 0)
     f._segContainer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
     f._segContainer:SetFrameLevel(f:GetFrameLevel() + 1)
+    f._segContainer:SetClipsChildren(true)
 
     f._textHolder = CreateFrame("Frame", nil, f)
     f._textHolder:SetAllPoints(f._segContainer)
@@ -1581,6 +1582,7 @@ local function UpdateChargeBar(barFrame)
         txt:SetTextColor(1, 1, 1, 1)
         barFrame._refreshChargeText = txt
     end
+    barFrame._refreshChargeText:SetShown(cfg.showText ~= false)
 
     local chargeDurObj = nil
     pcall(function()
@@ -1663,7 +1665,7 @@ local function UpdateChargeBar(barFrame)
         barFrame._text:SetText("")
     end
     if barFrame._refreshChargeText then
-        if shouldShowRecharge and activeChargeDurObj then
+        if cfg.showText ~= false and shouldShowRecharge and activeChargeDurObj then
             barFrame._refreshChargeText:SetText(FormatRemainingTimeText(activeChargeDurObj:GetRemainingDuration()))
         else
             barFrame._refreshChargeText:SetText("")
