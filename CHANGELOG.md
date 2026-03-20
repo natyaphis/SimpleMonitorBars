@@ -2,14 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 1.3.6
 
 - Maintenance update.
 
 ## 1.3.5
 
-- Reworked linear duration bars to follow the vflow-style timer path now that ring monitors are gone, and kept the default behavior draining from full to empty.
-- Preserved the reverse-growth option for duration bars while separating it from the standard status bar reverse-fill handling used by other bar types.
+- Adjusted linear duration bars so they now drain from full to empty by default, matching expected buff-duration behavior.
+- Kept `Reverse Growth` available for players who want the duration bar to fill in the opposite direction.
+
+## Unreleased
+
+- Maintenance update
 
 ## 1.3.4
 
