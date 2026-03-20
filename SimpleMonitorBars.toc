@@ -3,7 +3,7 @@
 ## Notes: Monitor Bars for Cooldown/Aura Tracking
 ## Notes-zhCN: 冷却与增益监控条
 ## Author: NatYaphis
-## Version: 1.3.2
+## Version: 1.3.3
 ## SavedVariables: SimpleMonitorBarsDB
 ## IconTexture: Interface\AddOns\SimpleMonitorBars\Media\Icon
 ## Category: Combat

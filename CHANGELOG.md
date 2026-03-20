@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.3
+
+Changes since 1.3.2:
+
+- Maintenance update
+
 ## 1.3.2
 
 Changes since 1.3.2:
