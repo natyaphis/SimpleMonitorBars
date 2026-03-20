@@ -40,9 +40,9 @@ local function RegisterEventHandlers()
         C_Timer.After(0.5, RebuildMonitorBars)
     end
 
-    handlers["UNIT_AURA"] = function(unit)
+    handlers["UNIT_AURA"] = function(unit, updateInfo)
         if IsMonitorBarsEnabled() then
-            MB:OnAuraUpdate(unit)
+            MB:OnAuraUpdate(unit, updateInfo)
         end
     end
 

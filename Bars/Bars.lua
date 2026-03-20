@@ -795,12 +795,15 @@ function MB:CreateBarFrame(barCfg)
     f._refreshChargeText = nil
     f._chargeBorders = nil
     f._trackedAuraInstanceID = nil
+    f._trackedUnit = nil
     f._lastKnownActive = false
     f._lastKnownStacks = 0
     f._nilCount = 0
     f._isChargeSpell = nil
     f._shadowCooldown = nil
     f._arcFeedFrame = 0
+    f._recentlyRemovedAuraInstanceID = nil
+    f._recentlyRemovedAuraExpiresAt = nil
 
     activeFrames[id] = f
     return f
@@ -1125,6 +1128,74 @@ local function GetAuraDataByInstanceID(auraInstanceID, preferredUnit, secondUnit
     return nil, nil
 end
 
+local function WasAuraInstanceRemoved(updateInfo, auraInstanceID)
+    if not updateInfo or not HasAuraInstanceID(auraInstanceID) then
+        return false
+    end
+
+    local removed = updateInfo.removedAuraInstanceIDs
+    if type(removed) ~= "table" then
+        return false
+    end
+
+    for i = 1, #removed do
+        if removed[i] == auraInstanceID then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function ClearRecentlyRemovedAura(barFrame, auraInstanceID)
+    if not barFrame then
+        return
+    end
+
+    if auraInstanceID == nil or barFrame._recentlyRemovedAuraInstanceID == auraInstanceID then
+        barFrame._recentlyRemovedAuraInstanceID = nil
+        barFrame._recentlyRemovedAuraExpiresAt = nil
+    end
+end
+
+local function IsRecentlyRemovedAura(barFrame, auraInstanceID)
+    if not barFrame or not HasAuraInstanceID(auraInstanceID) then
+        return false
+    end
+
+    local removedAuraInstanceID = barFrame._recentlyRemovedAuraInstanceID
+    local expiresAt = barFrame._recentlyRemovedAuraExpiresAt
+    if not removedAuraInstanceID or not expiresAt then
+        return false
+    end
+
+    if expiresAt <= GetTime() then
+        ClearRecentlyRemovedAura(barFrame, removedAuraInstanceID)
+        return false
+    end
+
+    return removedAuraInstanceID == auraInstanceID
+end
+
+local function MarkStackAuraRemoved(barFrame, auraInstanceID)
+    if not (barFrame and HasAuraInstanceID(auraInstanceID)) then
+        return
+    end
+
+    -- Ignore stale viewer updates for this aura briefly after UNIT_AURA reports removal.
+    barFrame._recentlyRemovedAuraInstanceID = auraInstanceID
+    barFrame._recentlyRemovedAuraExpiresAt = GetTime() + 0.25
+    barFrame._lastKnownActive = false
+    barFrame._lastKnownStacks = 0
+    barFrame._trackedAuraInstanceID = nil
+    barFrame._trackedUnit = nil
+    barFrame._nilCount = 0
+    ResetStackAnimationState(barFrame, 0)
+    SetStackSegmentsValue(barFrame, 0)
+    ClearCountText(barFrame)
+    UpdateBarActiveState(barFrame, false)
+end
+
 local function GetIciclesStacks()
     local aura = nil
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
@@ -1219,7 +1290,7 @@ UpdateStackBar = function(barFrame)
             RegisterViewerSignals(cdmFrame, barFrame._barID)
             barFrame._cdmFrame = cdmFrame
 
-            if HasAuraInstanceID(cdmFrame.auraInstanceID) then
+            if HasAuraInstanceID(cdmFrame.auraInstanceID) and not IsRecentlyRemovedAura(barFrame, cdmFrame.auraInstanceID) then
                 local baseUnit = cdmFrame.auraDataUnit or unitPref or barFrame._trackedUnit or "player"
                 local auraData, trackedUnit = GetAuraDataByInstanceID(cdmFrame.auraInstanceID, baseUnit, barFrame._trackedUnit)
                 if trackedUnit then
@@ -1234,7 +1305,10 @@ UpdateStackBar = function(barFrame)
         end
     end
 
-    if not isIciclesPlayer and not auraActive and HasAuraInstanceID(barFrame._trackedAuraInstanceID) then
+    if not isIciclesPlayer
+        and not auraActive
+        and HasAuraInstanceID(barFrame._trackedAuraInstanceID)
+        and not IsRecentlyRemovedAura(barFrame, barFrame._trackedAuraInstanceID) then
         local auraData, trackedUnit = GetAuraDataByInstanceID(barFrame._trackedAuraInstanceID, barFrame._trackedUnit, unitPref)
         if auraData then
             auraActive = true
@@ -2130,9 +2204,16 @@ function MB:OnCooldownUpdate()
     end
 end
 
-function MB:OnAuraUpdate(unit)
+function MB:OnAuraUpdate(unit, updateInfo)
     if unit ~= "player" and unit ~= "target" then
         return
+    end
+
+    local function RefreshStackBarForAuraUpdate(barFrame)
+        if barFrame._trackedUnit == unit and WasAuraInstanceRemoved(updateInfo, barFrame._trackedAuraInstanceID) then
+            MarkStackAuraRemoved(barFrame, barFrame._trackedAuraInstanceID)
+        end
+        UpdateStackBar(barFrame)
     end
 
     for _, f in pairs(activeFrames) do
@@ -2144,17 +2225,17 @@ function MB:OnAuraUpdate(unit)
                     f._needsDurationRefresh = true
                     UpdateDurationBar(f)
                 elseif f._cfg.barType == "stack" then
-                    UpdateStackBar(f)
+                    RefreshStackBarForAuraUpdate(f)
                 end
             elseif f._cfg.barType == "duration" and unit == "target" and cfgUnit == "player" then
 
                 f._needsDurationRefresh = true
             elseif f._cfg.barType == "stack" and unit == "target" and cfgUnit == "player" then
 
-                UpdateStackBar(f)
+                RefreshStackBarForAuraUpdate(f)
             elseif f._cfg.barType == "stack" and unit == "player" and cfgUnit == "target" then
 
-                UpdateStackBar(f)
+                RefreshStackBarForAuraUpdate(f)
             elseif f._cfg.barType == "duration" and unit == "player" and cfgUnit == "target" then
                 f._needsDurationRefresh = true
                 UpdateDurationBar(f)

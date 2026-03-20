@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## 1.3.6
 
-- Maintenance update.
+- Adjusted monitor bar runtime behavior and rendering logic.
 
 ## 1.3.5
 
