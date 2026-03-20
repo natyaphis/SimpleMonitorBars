@@ -37,6 +37,7 @@ local function MigrateMonitorBars(profileData)
         unit = "player",
         maxStacks = 5,
         maxCharges = 2,
+        isChargeSpell = nil,
         maxDuration = 60,
         width = 200,
         height = 20,

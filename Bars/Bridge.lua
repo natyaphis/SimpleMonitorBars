@@ -65,31 +65,80 @@ end
 
 local function ResolveSpellID(info)
     if not info then return nil end
+    if info.overrideSpellID and info.overrideSpellID > 0 then
+        return info.overrideSpellID
+    end
+
     local base = info.spellID or 0
+    if base > 0 and C_Spell and C_Spell.GetOverrideSpell then
+        local override = C_Spell.GetOverrideSpell(base)
+        if override and override > 0 and override ~= base then
+            return override
+        end
+    end
+
     local linked = info.linkedSpellIDs and info.linkedSpellIDs[1]
-    return linked or info.overrideSpellID or (base > 0 and base) or nil
+    if linked and linked > 0 then
+        return linked
+    end
+
+    return (base > 0 and base) or nil
+end
+
+local function MapSpellAlias(spellID, cdID, forceOverwrite)
+    if not spellID or spellID <= 0 then
+        return
+    end
+
+    if forceOverwrite or not spellToCooldownID[spellID] then
+        spellToCooldownID[spellID] = cdID
+    end
+
+    if C_Spell and C_Spell.GetBaseSpell then
+        local baseID = C_Spell.GetBaseSpell(spellID)
+        if baseID and baseID > 0 and baseID ~= spellID then
+            if forceOverwrite or not spellToCooldownID[baseID] then
+                spellToCooldownID[baseID] = cdID
+            end
+        end
+    end
 end
 
 local function MapSpellInfo(info, cdID, forceOverwrite)
     if not info then return end
     local sid = ResolveSpellID(info)
-    if sid and sid > 0 then
-        if forceOverwrite or not spellToCooldownID[sid] then
-            spellToCooldownID[sid] = cdID
-        end
-    end
+    MapSpellAlias(sid, cdID, forceOverwrite)
     if info.linkedSpellIDs then
         for _, lid in ipairs(info.linkedSpellIDs) do
-            if lid and lid > 0 and (forceOverwrite or not spellToCooldownID[lid]) then
-                spellToCooldownID[lid] = cdID
-            end
+            MapSpellAlias(lid, cdID, forceOverwrite)
         end
     end
-    if info.spellID and info.spellID > 0 then
-        if forceOverwrite or not spellToCooldownID[info.spellID] then
-            spellToCooldownID[info.spellID] = cdID
+    MapSpellAlias(info.spellID, cdID, forceOverwrite)
+end
+
+local function BuildSpellCandidateSet(spellID)
+    local candidates = {}
+    if not spellID or spellID <= 0 then
+        return candidates
+    end
+
+    candidates[spellID] = true
+
+    if C_Spell and C_Spell.GetBaseSpell then
+        local baseID = C_Spell.GetBaseSpell(spellID)
+        if baseID and baseID > 0 then
+            candidates[baseID] = true
         end
     end
+
+    if C_Spell and C_Spell.GetOverrideSpell then
+        local overrideID = C_Spell.GetOverrideSpell(spellID)
+        if overrideID and overrideID > 0 then
+            candidates[overrideID] = true
+        end
+    end
+
+    return candidates
 end
 
 local function IterateViewerFrames(viewer, visit)
@@ -240,6 +289,7 @@ function MB.FindCooldownIDBySpellID(spellID)
     end
 
     local foundCooldownID
+    local wantedSpellIDs = BuildSpellCandidateSet(spellID)
     IterateViewerSources(function(viewer)
         if foundCooldownID then
             return
@@ -261,11 +311,12 @@ function MB.FindCooldownIDBySpellID(spellID)
             end
 
             local resolvedSpellID = ResolveSpellID(info)
-            if resolvedSpellID == spellID or info.spellID == spellID then
+            if (resolvedSpellID and wantedSpellIDs[resolvedSpellID])
+                or (info.spellID and wantedSpellIDs[info.spellID]) then
                 foundCooldownID = cdID
             elseif info.linkedSpellIDs then
                 for _, linkedSpellID in ipairs(info.linkedSpellIDs) do
-                    if linkedSpellID == spellID then
+                    if wantedSpellIDs[linkedSpellID] then
                         foundCooldownID = cdID
                         break
                     end
@@ -273,7 +324,9 @@ function MB.FindCooldownIDBySpellID(spellID)
             end
 
             if foundCooldownID then
-                spellToCooldownID[spellID] = foundCooldownID
+                for wantedSpellID in pairs(wantedSpellIDs) do
+                    spellToCooldownID[wantedSpellID] = foundCooldownID
+                end
                 cooldownIDToFrame[foundCooldownID] = frame
             end
         end)

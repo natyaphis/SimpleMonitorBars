@@ -40,6 +40,13 @@ local ANCHOR_REL
 local STACK_FILL_SPEED = 12
 local ICICLES_SPELL_ID = 205473
 
+local function ResolveBarTexturePath(textureName)
+    if LSM and LSM.Fetch and textureName then
+        return LSM:Fetch("statusbar", textureName) or BAR_TEXTURE
+    end
+    return BAR_TEXTURE
+end
+
 function MB.rounded(num, idp)
     if not num then return num end
     local mult = 10^(idp or 0)
@@ -407,6 +414,19 @@ local function GetOrCreateShadowCooldown(barFrame)
     return cd
 end
 
+local function HideChargeVisuals(barFrame)
+    if not barFrame then return end
+    if barFrame._chargeBG then barFrame._chargeBG:Hide() end
+    if barFrame._chargeBar then barFrame._chargeBar:Hide() end
+    if barFrame._refreshCharge then barFrame._refreshCharge:Hide() end
+    if barFrame._refreshChargeText then barFrame._refreshChargeText:SetText("") end
+    if barFrame._chargeBorders then
+        for _, border in ipairs(barFrame._chargeBorders) do
+            border:Hide()
+        end
+    end
+end
+
 
 
 
@@ -724,6 +744,11 @@ function MB:CreateBarFrame(barCfg)
     f._needsDurationRefresh = true
     f._cachedChargeDurObj = nil
     f._lastRechargingSlot = nil
+    f._chargeBG = nil
+    f._chargeBar = nil
+    f._refreshCharge = nil
+    f._refreshChargeText = nil
+    f._chargeBorders = nil
     f._trackedAuraInstanceID = nil
     f._lastKnownActive = false
     f._lastKnownStacks = 0
@@ -775,8 +800,22 @@ function MB:ApplyStyle(barFrame)
             seg:SetFrameLevel(baseLevel + 2)
         end
     end
+    if barFrame._chargeBar then
+        barFrame._chargeBar:SetFrameStrata(strata)
+        barFrame._chargeBar:SetFrameLevel(baseLevel + 2)
+    end
+    if barFrame._refreshCharge then
+        barFrame._refreshCharge:SetFrameStrata(strata)
+        barFrame._refreshCharge:SetFrameLevel(baseLevel + 3)
+    end
     if barFrame._segBorders then
         for _, border in ipairs(barFrame._segBorders) do
+            border:SetFrameStrata(strata)
+            border:SetFrameLevel(baseLevel + 4)
+        end
+    end
+    if barFrame._chargeBorders then
+        for _, border in ipairs(barFrame._chargeBorders) do
             border:SetFrameStrata(strata)
             border:SetFrameLevel(baseLevel + 4)
         end
@@ -850,7 +889,7 @@ function MB:ApplyStyle(barFrame)
 
     local count
     if cfg.barType == "charge" then
-        count = (cfg.maxCharges > 0 and cfg.maxCharges or barFrame._cachedMaxCharges)
+        count = 0
     elseif cfg.barType == "duration" then
         count = 1
     else
@@ -993,6 +1032,21 @@ local function ResolveTrackedCooldownID(spellID)
     return FindCooldownIDBySpellID(spellID)
 end
 
+local function ResolveRuntimeSpellID(spellID)
+    if not spellID or spellID <= 0 then
+        return nil
+    end
+
+    if C_Spell and C_Spell.GetOverrideSpell then
+        local overrideID = C_Spell.GetOverrideSpell(spellID)
+        if overrideID and overrideID > 0 and overrideID ~= spellID then
+            return overrideID
+        end
+    end
+
+    return spellID
+end
+
 local function GetStackCountFromAuraOrFrame(auraData, cdmFrame)
     if auraData then
         if auraData.applications ~= nil then
@@ -1109,6 +1163,8 @@ end
 UpdateStackBar = function(barFrame)
     local cfg = barFrame._cfg
     if not cfg or cfg.barType ~= "stack" then return end
+
+    HideChargeVisuals(barFrame)
 
     local spellID = cfg.spellID
     if not spellID or spellID <= 0 then return end
@@ -1293,13 +1349,34 @@ end
 
 local function UpdateRegularCooldownBar(barFrame)
     local cfg = barFrame._cfg
-    local spellID = cfg.spellID
+    local spellID = ResolveRuntimeSpellID(cfg.spellID or 0) or cfg.spellID
+
+    HideChargeVisuals(barFrame)
 
     local isOnGCD = false
     pcall(function()
         local cdInfo = C_Spell.GetSpellCooldown(spellID)
         if cdInfo and cdInfo.isOnGCD == true then isOnGCD = true end
     end)
+
+    local cooldownID = spellToCooldownID[spellID]
+    if not cooldownID and cfg.spellID and cfg.spellID > 0 then
+        cooldownID = spellToCooldownID[cfg.spellID]
+    end
+    if not cooldownID then
+        cooldownID = ResolveTrackedCooldownID(spellID)
+    end
+    if not cooldownID and cfg.spellID and cfg.spellID ~= spellID then
+        cooldownID = ResolveTrackedCooldownID(cfg.spellID)
+    end
+    barFrame._cooldownID = cooldownID
+
+    if cooldownID then
+        local cdmFrame = FindCDMFrame(cooldownID)
+        if cdmFrame then
+            barFrame._cdmFrame = cdmFrame
+        end
+    end
 
     local shadowCD = GetOrCreateShadowCooldown(barFrame)
     local durObj = nil
@@ -1363,15 +1440,36 @@ local function UpdateChargeBar(barFrame)
     local cfg = barFrame._cfg
     if not cfg or cfg.barType ~= "charge" then return end
 
-    local spellID = cfg.spellID
+    local spellID = ResolveRuntimeSpellID(cfg.spellID or 0) or cfg.spellID
     if not spellID or spellID <= 0 then return end
 
-    local chargeJustRefreshed = false
+    local cooldownID = spellToCooldownID[spellID]
+    if not cooldownID and cfg.spellID and cfg.spellID > 0 then
+        cooldownID = spellToCooldownID[cfg.spellID]
+    end
+    if not cooldownID then
+        cooldownID = ResolveTrackedCooldownID(spellID)
+    end
+    if not cooldownID and cfg.spellID and cfg.spellID ~= spellID then
+        cooldownID = ResolveTrackedCooldownID(cfg.spellID)
+    end
+    barFrame._cooldownID = cooldownID
+
+    if cooldownID then
+        local cdmFrame = FindCDMFrame(cooldownID)
+        if cdmFrame then
+            barFrame._cdmFrame = cdmFrame
+        end
+    end
+
     if barFrame._needsChargeRefresh then
         barFrame._cachedChargeInfo = C_Spell.GetSpellCharges(spellID)
         barFrame._needsChargeRefresh = false
-        barFrame._isChargeSpell = barFrame._cachedChargeInfo ~= nil
-        chargeJustRefreshed = true
+        if cfg.isChargeSpell ~= nil then
+            barFrame._isChargeSpell = (cfg.isChargeSpell == true)
+        else
+            barFrame._isChargeSpell = barFrame._cachedChargeInfo ~= nil
+        end
     end
 
     if barFrame._isChargeSpell == false then
@@ -1381,6 +1479,7 @@ local function UpdateChargeBar(barFrame)
 
     local chargeInfo = barFrame._cachedChargeInfo
     if not chargeInfo then
+        HideChargeVisuals(barFrame)
         if cfg.showText ~= false and barFrame._text then
             barFrame._text:SetText("")
         end
@@ -1400,13 +1499,6 @@ local function UpdateChargeBar(barFrame)
     end
     if maxCharges <= 0 then maxCharges = 2 end
 
-    local segs = barFrame._segments
-    if not segs or #segs ~= maxCharges then
-        CreateSegments(barFrame, maxCharges, cfg)
-        segs = barFrame._segments
-    end
-    if not segs then return end
-
     local currentCharges = chargeInfo.currentCharges
     local isSecret = issecretvalue and issecretvalue(currentCharges)
     local exactCharges = currentCharges
@@ -1416,73 +1508,165 @@ local function UpdateChargeBar(barFrame)
         exactCharges = GetExactCount(barFrame, maxCharges)
     end
 
-    local needApplyTimer = false
-    if barFrame._needsDurationRefresh then
-        if isSecret and chargeJustRefreshed then
-
-        else
-            barFrame._cachedChargeDurObj = C_Spell.GetSpellChargeDuration(spellID)
-            barFrame._needsDurationRefresh = false
-            needApplyTimer = true
+    if barFrame._segments then
+        for _, seg in ipairs(barFrame._segments) do
+            seg:Hide()
+        end
+    end
+    if barFrame._segBGs then
+        for _, bg in ipairs(barFrame._segBGs) do
+            bg:Hide()
+        end
+    end
+    if barFrame._segBorders then
+        for _, border in ipairs(barFrame._segBorders) do
+            border:Hide()
         end
     end
 
-    local chargeDurObj = barFrame._cachedChargeDurObj
-    local rechargingSlot = (type(exactCharges) == "number" and exactCharges < maxCharges) and (exactCharges + 1) or nil
+    if not barFrame._chargeBG then
+        local bg = barFrame._segContainer:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(barFrame._segContainer)
+        barFrame._chargeBG = bg
+    end
+    barFrame._chargeBG:SetColorTexture(0.1, 0.1, 0.1, 0.5)
+    if barFrame._mask then
+        if not barFrame._chargeBG._masked then
+            barFrame._chargeBG:AddMaskTexture(barFrame._mask)
+            barFrame._chargeBG._masked = true
+        end
+    end
+    barFrame._chargeBG:Show()
 
-    if barFrame._lastRechargingSlot ~= rechargingSlot then
-        needApplyTimer = true
-        barFrame._lastRechargingSlot = rechargingSlot
+    if not barFrame._chargeBar then
+        local chargeBar = CreateFrame("StatusBar", nil, barFrame._segContainer)
+        chargeBar:SetFrameLevel(barFrame._segContainer:GetFrameLevel() + 1)
+        chargeBar:SetAllPoints(barFrame._segContainer)
+        ConfigureStatusBar(chargeBar)
+        barFrame._chargeBar = chargeBar
+    end
+    barFrame._chargeBar:SetStatusBarTexture(ResolveBarTexturePath(cfg.barTexture))
+    barFrame._chargeBar:SetAllPoints(barFrame._segContainer)
+    if barFrame._mask and barFrame._chargeBar:GetStatusBarTexture() and not barFrame._chargeBar._masked then
+        barFrame._chargeBar:GetStatusBarTexture():AddMaskTexture(barFrame._mask)
+        barFrame._chargeBar._masked = true
+    end
+    local barColor = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
+    barFrame._chargeBar:SetStatusBarColor(barColor[1], barColor[2], barColor[3], barColor[4])
+    barFrame._chargeBar:SetMinMaxValues(0, maxCharges)
+    barFrame._chargeBar:SetValue(currentCharges)
+    barFrame._chargeBar:Show()
+
+    if not barFrame._refreshCharge then
+        local refreshCharge = CreateFrame("StatusBar", nil, barFrame._segContainer)
+        refreshCharge:SetFrameLevel(barFrame._segContainer:GetFrameLevel() + 2)
+        refreshCharge:SetPoint("LEFT", barFrame._chargeBar:GetStatusBarTexture(), "RIGHT")
+        ConfigureStatusBar(refreshCharge)
+        barFrame._refreshCharge = refreshCharge
+    end
+    barFrame._refreshCharge:SetStatusBarTexture(ResolveBarTexturePath(cfg.barTexture))
+    if barFrame._mask and barFrame._refreshCharge:GetStatusBarTexture() and not barFrame._refreshCharge._masked then
+        barFrame._refreshCharge:GetStatusBarTexture():AddMaskTexture(barFrame._mask)
+        barFrame._refreshCharge._masked = true
+    end
+    if not barFrame._refreshChargeText then
+        local txt = barFrame._refreshCharge:CreateFontString(nil, "OVERLAY")
+        txt:SetAllPoints(barFrame._refreshCharge)
+        txt:SetJustifyH("CENTER")
+        txt:SetFont(
+            ResolveFontPath(cfg.fontName),
+            cfg.fontSize or 14,
+            cfg.outline or "OUTLINE"
+        )
+        txt:SetTextColor(1, 1, 1, 1)
+        barFrame._refreshChargeText = txt
     end
 
-    local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
+    local chargeDurObj = nil
+    pcall(function()
+        chargeDurObj = C_Spell.GetSpellChargeDuration(spellID)
+    end)
+    if chargeDurObj then
+        barFrame._cachedChargeDurObj = chargeDurObj
+    else
+        chargeDurObj = barFrame._cachedChargeDurObj
+    end
+    barFrame._needsDurationRefresh = false
+
+    local totalW = barFrame._segContainer:GetWidth()
+    local totalH = barFrame._segContainer:GetHeight()
+    if totalW > 0 and totalH > 0 then
+        local chargeWidth = totalW / maxCharges
+        barFrame._refreshCharge:SetSize(chargeWidth, totalH)
+    end
+
+    local rechargeColor = cfg.rechargeColor or cfg.barColor or { 0.4, 0.75, 1.0, 1 }
+    barFrame._refreshCharge:SetStatusBarColor(rechargeColor[1], rechargeColor[2], rechargeColor[3], rechargeColor[4])
+
+    local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.Immediate or 0
     local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.ElapsedTime or 0
+    local activeChargeDurObj = nil
+    pcall(function()
+        barFrame._refreshCharge:SetTimerDuration(chargeDurObj, interpolation, direction)
+    end)
+    if barFrame._refreshCharge.GetTimerDuration then
+        activeChargeDurObj = barFrame._refreshCharge:GetTimerDuration()
+    end
 
-    for i = 1, maxCharges do
-        local seg = segs[i]
-        if not seg then break end
+    local shouldShowRecharge = (chargeDurObj ~= nil) and (activeChargeDurObj ~= nil)
+    if shouldShowRecharge then
+        barFrame._refreshCharge:Show()
+    else
+        barFrame._refreshCharge:Hide()
+    end
 
-        if type(exactCharges) == "number" then
-            if i <= exactCharges then
-                seg:SetMinMaxValues(0, 1)
-                seg:SetValue(1)
-            elseif rechargingSlot and i == rechargingSlot then
-                if needApplyTimer then
-                    if chargeDurObj and seg.SetTimerDuration then
-                        seg:SetMinMaxValues(0, 1)
-                        seg:SetTimerDuration(chargeDurObj, interpolation, direction)
-                        if seg.SetToTargetValue then
-                            seg:SetToTargetValue()
-                        end
-                    else
-                        local cd = chargeInfo.cooldownDuration or 0
-                        local start = chargeInfo.cooldownStartTime or 0
-                        if cd > 0 and start > 0 then
-                            seg:SetMinMaxValues(0, 1)
-                            local now = GetTime()
-                            seg:SetValue(math.min(math.max((now - start) / cd, 0), 1))
-                        else
-                            seg:SetMinMaxValues(0, 1)
-                            seg:SetValue(0)
-                        end
-                    end
-                end
-            else
-                seg:SetMinMaxValues(0, 1)
-                seg:SetValue(0)
+    local borderThickness = tonumber((cfg.maskAndBorderStyle and MB.MASK_AND_BORDER_STYLES[NormalizeMaskAndBorderStyle(cfg.maskAndBorderStyle)] and MB.MASK_AND_BORDER_STYLES[NormalizeMaskAndBorderStyle(cfg.maskAndBorderStyle)].thickness) or 1) or 1
+    if maxCharges > 1 and borderThickness > 0 and totalW > 0 and totalH > 0 then
+        barFrame._chargeBorders = barFrame._chargeBorders or {}
+        for i = maxCharges + 1, #barFrame._chargeBorders do
+            if barFrame._chargeBorders[i] then
+                barFrame._chargeBorders[i]:Hide()
+                barFrame._chargeBorders[i] = nil
+            end
+        end
+
+        local gap = tonumber(cfg.segmentGap) or 0
+        local segW = (totalW - (maxCharges - 1) * gap) / maxCharges
+        local borderColor = cfg.borderColor or { 0, 0, 0, 1 }
+        for i = 1, maxCharges do
+            if not barFrame._chargeBorders[i] then
+                local border = CreateFrame("Frame", nil, barFrame._segContainer, "BackdropTemplate")
+                border:SetFrameLevel(barFrame._segContainer:GetFrameLevel() + 10)
+                barFrame._chargeBorders[i] = border
+            end
+            local border = barFrame._chargeBorders[i]
+            local xOff = (i - 1) * (segW + gap)
+            border:ClearAllPoints()
+            border:SetPoint("TOPLEFT", barFrame._segContainer, "TOPLEFT", xOff - borderThickness, borderThickness)
+            border:SetPoint("BOTTOMRIGHT", barFrame._segContainer, "TOPLEFT", xOff + segW + borderThickness, -totalH - borderThickness)
+            border:SetBackdrop({
+                edgeFile = "Interface\\BUTTONS\\WHITE8X8",
+                edgeSize = borderThickness,
+            })
+            border:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+            border:Show()
+        end
+    else
+        if barFrame._chargeBorders then
+            for _, border in ipairs(barFrame._chargeBorders) do
+                border:Hide()
             end
         end
     end
 
-    ApplySegmentColors(barFrame, exactCharges)
-
-    if cfg.showText ~= false and barFrame._text then
-        if type(exactCharges) == "number" and exactCharges >= maxCharges then
-            barFrame._text:SetText("")
-        elseif chargeDurObj then
-            barFrame._text:SetText(FormatRemainingTimeText(chargeDurObj:GetRemainingDuration()))
+    if barFrame._text then
+        barFrame._text:SetText("")
+    end
+    if barFrame._refreshChargeText then
+        if shouldShowRecharge and activeChargeDurObj then
+            barFrame._refreshChargeText:SetText(FormatRemainingTimeText(activeChargeDurObj:GetRemainingDuration()))
         else
-            barFrame._text:SetText("")
+            barFrame._refreshChargeText:SetText("")
         end
     end
     if type(exactCharges) == "number" then
@@ -1497,6 +1681,8 @@ end
 local function UpdateDurationBar(barFrame)
     local cfg = barFrame._cfg
     if not cfg or cfg.barType ~= "duration" then return end
+
+    HideChargeVisuals(barFrame)
 
     local spellID = cfg.spellID
     if not spellID or spellID <= 0 then return end

@@ -265,6 +265,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         unit       = unit or "player",
         maxStacks  = 5,
         maxCharges = 0,
+        isChargeSpell = (barType == "charge"),
         maxDuration = 60,
         width      = 300,
         height     = 15,
@@ -1754,6 +1755,7 @@ local function ShowCatalog(rebuildTab)
         local bar = NewBarDefaults(id, barType, spellID, spellName, unit)
         if barType == "charge" then
             local chargeInfo = C_Spell.GetSpellCharges(spellID)
+            bar.isChargeSpell = (chargeInfo ~= nil)
             if chargeInfo and chargeInfo.maxCharges then
                 if not issecretvalue or not issecretvalue(chargeInfo.maxCharges) then
                     bar.maxCharges = chargeInfo.maxCharges
