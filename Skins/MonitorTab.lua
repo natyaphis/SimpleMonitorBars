@@ -67,7 +67,7 @@ local HALF_CONTROL_RELATIVE_WIDTH = 0.5
 local LABELED_ROW_HEIGHT = 44
 local COMPACT_ROW_HEIGHT = 24
 local CONTROL_ROW_SPACING = 3
-local SECTION_SPACER_HEIGHT = 3
+local SECTION_SPACER_HEIGHT = 6
 local MONITOR_BARS_FLOW_LAYOUT = "SMBFlow3"
 local MONITOR_BARS_SPEC_LAYOUT = "SMBSpecSpread"
 local TEXTURE_DROPDOWN_VISIBLE_ITEMS = 20
@@ -700,6 +700,8 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         return row
     end
 
+    AddMonitorHeading(container, L.mbGeneralSection or "总体设置")
+
     local topActionRow = AddTwoColumnRow(container)
     topActionRow.noAutoHeight = true
     topActionRow:SetHeight(COMPACT_ROW_HEIGHT)
@@ -894,8 +896,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         hideTrackerCB:SetFullWidth(true)
         container:AddChild(hideTrackerCB)
     end
-    AddSpacer(container)
-
     if barCfg.barType == "stack" then
     elseif barCfg.barType == "charge" then
         local chargeSlider = AceGUI:Create("Slider")
@@ -948,8 +948,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             specGroup:AddChild(specCB)
         end
     end
-    AddSpacer(container)
-
     AddMonitorHeading(container, L.generalSettings)
 
     local styleGroup = AceGUI:Create("SimpleGroup")
@@ -1386,7 +1384,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     local fontItems, fontOrder = GetFontItems()
 
     if barCfg.barType == "stack" or barCfg.barType == "charge" or barCfg.barType == "duration" then
-        AddSpacer(styleGroup)
         AddMonitorHeading(styleGroup, L.mbCountTextHeading or "层数文字")
 
         local countTextCB = AceGUI:Create("CheckBox")
@@ -1506,7 +1503,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end
 
     if barCfg.barType == "charge" or barCfg.barType == "duration" then
-        AddSpacer(styleGroup)
         AddMonitorHeading(styleGroup, L.mbTimeTextHeading or "时间文字")
 
         local textCB = AceGUI:Create("CheckBox")
@@ -1763,8 +1759,8 @@ local function ShowCatalog(rebuildTab)
         print("|cff00ccff[SimpleMonitorBars]|r " .. string.format(L.mbAdded, templateName))
     end
 
-
-    local catalogEntries = {}
+    local skillEntries = {}
+    local auraEntries = {}
     local templateEntries = {
         {
             spellID = 0,
@@ -1809,30 +1805,30 @@ local function ShowCatalog(rebuildTab)
         }
     end
 
-    local function ClassifyCatalogEntry(entry, barType)
+    local function ClassifyCatalogEntry(target, entry, barType)
         local matchedSpecs = GetMatchingSpecsForSpell(specSpellMap, entry.spellID)
         local isCurrentSpecOnly = (#matchedSpecs > 0 and #matchedSpecs < numSpecs)
 
         if isCurrentSpecOnly then
             for _, specIndex in ipairs(matchedSpecs) do
                 if specIndex == currentSpec then
-                    AddCatalogEntry(catalogEntries, entry, barType)
+                    AddCatalogEntry(target, entry, barType)
                     return
                 end
             end
         end
 
-        AddCatalogEntry(catalogEntries, entry, barType)
+        AddCatalogEntry(target, entry, barType)
     end
 
     for _, entry in ipairs(cooldowns) do
-        ClassifyCatalogEntry(entry, "charge")
+        ClassifyCatalogEntry(skillEntries, entry, "charge")
     end
     for _, entry in ipairs(auras) do
-        ClassifyCatalogEntry(entry, "stack")
+        ClassifyCatalogEntry(auraEntries, entry, "stack")
     end
     for _, entry in ipairs(specialEntries) do
-        ClassifyCatalogEntry(entry, entry.barType or "stack")
+        ClassifyCatalogEntry(auraEntries, entry, entry.barType or "stack")
     end
 
     local function SortEntries(entries)
@@ -1841,7 +1837,8 @@ local function ShowCatalog(rebuildTab)
         end)
     end
 
-    SortEntries(catalogEntries)
+    SortEntries(skillEntries)
+    SortEntries(auraEntries)
 
     catalogFrame = ns.UI.OpenSpellCatalogFrame(
         L.mbScanCatalog,
@@ -1854,8 +1851,15 @@ local function ShowCatalog(rebuildTab)
                 end,
             },
             {
-                heading  = "",
-                entries  = catalogEntries,
+                heading  = L.mbSkillSection or "技能",
+                entries  = skillEntries,
+                onSelect = function(entry)
+                    AddBar(entry.spellID, entry.name, entry.barType or "charge", entry.unit or "player")
+                end,
+            },
+            {
+                heading  = L.mbAuraSection or "光环",
+                entries  = auraEntries,
                 onSelect = function(entry)
                     AddBar(entry.spellID, entry.name, entry.barType or "charge", entry.unit or "player")
                 end,
@@ -1916,23 +1920,23 @@ function ns.BuildMonitorTab(scroll)
     local addHintTopSpacer = AceGUI:Create("Label")
     addHintTopSpacer:SetText("")
     addHintTopSpacer:SetFullWidth(true)
-    addHintTopSpacer:SetHeight(3)
+    addHintTopSpacer:SetHeight(SECTION_SPACER_HEIGHT)
     scroll:AddChild(addHintTopSpacer)
 
-    local addHintLabel = AceGUI:Create("Label")
-    addHintLabel:SetText(L.mbAddBarHint or "添加监控条后，触发和专精设置一般会自动生成，\n按照需要自定义尺寸、材质、染色、文字即可。")
-    addHintLabel:SetFullWidth(true)
-    if addHintLabel.label then
-        addHintLabel.label:SetJustifyH("CENTER")
-        addHintLabel.label:SetTextColor(1, 1, 1, 1)
+    local catalogHintLabel = AceGUI:Create("Label")
+    catalogHintLabel:SetText(L.mbCatalogHint or "此列表没有的技能或光环可以尝试用模版输入ID手动添加")
+    catalogHintLabel:SetFullWidth(true)
+    if catalogHintLabel.label then
+        catalogHintLabel.label:SetJustifyH("CENTER")
+        catalogHintLabel.label:SetTextColor(1, 1, 1, 1)
     end
-    scroll:AddChild(addHintLabel)
+    scroll:AddChild(catalogHintLabel)
 
-    local addHintBottomSpacer = AceGUI:Create("Label")
-    addHintBottomSpacer:SetText("")
-    addHintBottomSpacer:SetFullWidth(true)
-    addHintBottomSpacer:SetHeight(3)
-    scroll:AddChild(addHintBottomSpacer)
+    local catalogHintBottomSpacer = AceGUI:Create("Label")
+    catalogHintBottomSpacer:SetText("")
+    catalogHintBottomSpacer:SetFullWidth(true)
+    catalogHintBottomSpacer:SetHeight(SECTION_SPACER_HEIGHT)
+    scroll:AddChild(catalogHintBottomSpacer)
 
     local barItems, barOrder, idToIndex = GetBarDropdownList(cfg)
     if #barOrder == 0 then
@@ -1942,12 +1946,6 @@ function ns.BuildMonitorTab(scroll)
         scroll:AddChild(emptyLabel)
         return
     end
-
-    local headingSpacer = AceGUI:Create("Label")
-    headingSpacer:SetText("")
-    headingSpacer:SetFullWidth(true)
-    headingSpacer:SetHeight(3)
-    scroll:AddChild(headingSpacer)
 
     AddMonitorHeading(scroll, L.monitorBars)
 
@@ -1969,7 +1967,7 @@ function ns.BuildMonitorTab(scroll)
         local noSpecSpacer = AceGUI:Create("Label")
         noSpecSpacer:SetText("")
         noSpecSpacer:SetFullWidth(true)
-        noSpecSpacer:SetHeight(3)
+        noSpecSpacer:SetHeight(SECTION_SPACER_HEIGHT)
         scroll:AddChild(noSpecSpacer)
 
         if not selectedVisible then
@@ -1995,16 +1993,9 @@ function ns.BuildMonitorTab(scroll)
             return
         end
 
-        local deleteSpacer = AceGUI:Create("Label")
-        deleteSpacer:SetText("")
-        deleteSpacer:SetFullWidth(true)
-        deleteSpacer:SetHeight(3)
-        detailHost:AddChild(deleteSpacer)
-
         AddDeleteButton(detailHost, barCfg, RebuildContent, barDD)
 
-        local configGroup = AceGUI:Create("InlineGroup")
-        configGroup:SetTitle("")
+        local configGroup = AceGUI:Create("SimpleGroup")
         configGroup:SetFullWidth(true)
         configGroup:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
         detailHost:AddChild(configGroup)

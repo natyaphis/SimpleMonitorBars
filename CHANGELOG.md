@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.4.1
+
+- Refined monitor settings and configuration handling.
+- Updated localization text across supported locales.
+
 ## 1.4.0
 
 - Refined monitor settings and configuration handling.
