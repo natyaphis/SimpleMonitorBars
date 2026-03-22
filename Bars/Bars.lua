@@ -1827,32 +1827,31 @@ local function UpdateDurationBar(barFrame)
     local auraInstanceID = nil
     local unit = nil
 
-    if cooldownID then
-        cdmFrame = FindCDMFrame(cooldownID)
-        if cdmFrame then
-            RegisterViewerSignals(cdmFrame, barFrame._barID)
-            barFrame._cdmFrame = cdmFrame
+    -- Prefer direct aura reads so duration bars work without requiring the
+    -- Blizzard cooldown viewer to track the buff first.
+    local primaryUnit = cfg.unit or "player"
+    local otherUnit = (primaryUnit == "player") and "target" or "player"
 
-            if HasAuraInstanceID(cdmFrame.auraInstanceID) then
-                auraActive = true
-                auraInstanceID = cdmFrame.auraInstanceID
-                unit = cdmFrame.auraDataUnit or cfg.unit or "player"
-                barFrame._trackedAuraInstanceID = auraInstanceID
-                barFrame._trackedUnit = unit
-            end
+    local auraData = FindHelpfulAuraBySpellID(primaryUnit, spellID)
+    if auraData then
+        auraActive = true
+        auraInstanceID = auraData.auraInstanceID
+        unit = primaryUnit
+        barFrame._trackedAuraInstanceID = auraData.auraInstanceID
+        barFrame._trackedUnit = primaryUnit
+    else
+        auraData = FindHelpfulAuraBySpellID(otherUnit, spellID)
+        if auraData then
+            auraActive = true
+            auraInstanceID = auraData.auraInstanceID
+            unit = otherUnit
+            barFrame._trackedAuraInstanceID = auraData.auraInstanceID
+            barFrame._trackedUnit = otherUnit
         end
     end
 
     if not auraActive and HasAuraInstanceID(barFrame._trackedAuraInstanceID) then
-        local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID("player", barFrame._trackedAuraInstanceID)
-        if not auraData then
-            auraData = C_UnitAuras.GetAuraDataByAuraInstanceID("target", barFrame._trackedAuraInstanceID)
-            if auraData then
-                unit = "target"
-            end
-        else
-            unit = "player"
-        end
+        auraData, unit = GetAuraDataByInstanceID(barFrame._trackedAuraInstanceID, barFrame._trackedUnit, primaryUnit)
         if auraData then
             auraActive = true
             auraInstanceID = barFrame._trackedAuraInstanceID
@@ -1860,25 +1859,21 @@ local function UpdateDurationBar(barFrame)
         end
     end
 
+    if not auraActive and cooldownID then
+        cdmFrame = FindCDMFrame(cooldownID)
+        if cdmFrame then
+            RegisterViewerSignals(cdmFrame, barFrame._barID)
+            barFrame._cdmFrame = cdmFrame
 
-    if not auraActive then
-        local primaryUnit = cfg.unit or "player"
-        local auraData = FindHelpfulAuraBySpellID(primaryUnit, spellID)
-        if auraData then
-            auraActive = true
-            auraInstanceID = auraData.auraInstanceID
-            unit = primaryUnit
-            barFrame._trackedAuraInstanceID = auraData.auraInstanceID
-            barFrame._trackedUnit = primaryUnit
-        else
-            local other = (primaryUnit == "player") and "target" or "player"
-            auraData = FindHelpfulAuraBySpellID(other, spellID)
-            if auraData then
-                auraActive = true
-                auraInstanceID = auraData.auraInstanceID
-                unit = other
-                barFrame._trackedAuraInstanceID = auraData.auraInstanceID
-                barFrame._trackedUnit = other
+            if HasAuraInstanceID(cdmFrame.auraInstanceID) then
+                local viewerUnit = cdmFrame.auraDataUnit or primaryUnit
+                auraData, unit = GetAuraDataByInstanceID(cdmFrame.auraInstanceID, viewerUnit, otherUnit)
+                if auraData then
+                    auraActive = true
+                    auraInstanceID = cdmFrame.auraInstanceID
+                    barFrame._trackedAuraInstanceID = auraInstanceID
+                    barFrame._trackedUnit = unit
+                end
             end
         end
     end

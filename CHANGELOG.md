@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.9
+
+- Adjusted monitor bar runtime behavior.
+
 ## 1.3.8
 
 - Updated localization text across supported locales.
