@@ -683,15 +683,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         f:SetPoint("CENTER", UIParent, "CENTER", posX, posY)
     end
 
-    local function AddSpacer(parent)
-        -- Keep section transitions readable on narrow window layouts.
-        local spacer = AceGUI:Create("Label")
-        spacer:SetText("")
-        spacer:SetFullWidth(true)
-        spacer:SetHeight(SECTION_SPACER_HEIGHT)
-        parent:AddChild(spacer)
-    end
-
     local function AddTwoColumnRow(parent)
         local row = AceGUI:Create("SimpleGroup")
         row:SetFullWidth(true)
