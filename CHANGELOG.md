@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.4.3
+
+- Refined monitor settings and configuration handling.
+
 ## 1.4.2
 
 - Refined monitor settings and configuration handling.

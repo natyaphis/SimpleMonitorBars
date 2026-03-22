@@ -851,25 +851,11 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         container:AddChild(condDD)
     end
 
-    local hideTrackerCB = AceGUI:Create("CheckBox")
-    hideTrackerCB:SetLabel(L.mbHideFromTracker)
-    hideTrackerCB:SetValue(barCfg.hideFromCDM or false)
-    hideTrackerCB:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.hideFromCDM = val
-        MB:RebuildAllBars()
-    end)
     if barCfg.barType == "stack" then
-        local trackerRow = AddTwoColumnRow(container)
-        trackerRow.noAutoHeight = true
-        trackerRow:SetHeight(COMPACT_ROW_HEIGHT)
-
-        hideTrackerCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        trackerRow:AddChild(hideTrackerCB)
-
         local smoothCB = AceGUI:Create("CheckBox")
         smoothCB:SetLabel(L.mbSmoothAnimation)
         smoothCB:SetValue(barCfg.smoothAnimation ~= false)
-        smoothCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        smoothCB:SetFullWidth(true)
         smoothCB:SetCallback("OnValueChanged", function(_, _, val)
             barCfg.smoothAnimation = val
             MB:RebuildAllBars()
@@ -882,10 +868,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         smoothCB:SetCallback("OnLeave", function()
             GameTooltip:Hide()
         end)
-        trackerRow:AddChild(smoothCB)
-    else
-        hideTrackerCB:SetFullWidth(true)
-        container:AddChild(hideTrackerCB)
+        container:AddChild(smoothCB)
     end
     if barCfg.barType == "stack" then
     elseif barCfg.barType == "charge" then
