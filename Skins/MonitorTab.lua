@@ -1711,7 +1711,10 @@ local function ShowCatalog(rebuildTab)
     local numSpecs = GetNumSpecializations() or 0
     local specSpellMap = BuildSpecSpellMap()
     local specialEntries = {}
-    if not ContainsSpell(cooldowns, ICICLES_SPELL_ID) and not ContainsSpell(auras, ICICLES_SPELL_ID) then
+    if PLAYER_CLASS_TAG == "MAGE"
+        and currentSpec == 1
+        and not ContainsSpell(cooldowns, ICICLES_SPELL_ID)
+        and not ContainsSpell(auras, ICICLES_SPELL_ID) then
         specialEntries[#specialEntries + 1] = {
             spellID = ICICLES_SPELL_ID,
             name = iciclesName,
@@ -1724,6 +1727,7 @@ local function ShowCatalog(rebuildTab)
     CloseCatalogFrame()
 
     local cfg = ns.db.monitorBars
+    local TEMPLATE_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 
     local function AddBar(spellID, spellName, barType, unit)
         local id = cfg.nextID or (#cfg.bars + 1)
@@ -1745,8 +1749,48 @@ local function ShowCatalog(rebuildTab)
         print("|cff00ccff[SimpleMonitorBars]|r " .. string.format(L.mbAdded, spellName ~= "" and spellName or tostring(spellID)))
     end
 
+    local function AddTemplateBar(barType, templateName)
+        local id = cfg.nextID or (#cfg.bars + 1)
+        cfg.nextID = id + 1
+
+        local bar = NewBarDefaults(id, barType, 0, "", "player")
+        bar.showCondition = "always"
+        table.insert(cfg.bars, bar)
+
+        selectedBarID = id
+        MB:RebuildAllBars()
+        if rebuildTab then rebuildTab() end
+        print("|cff00ccff[SimpleMonitorBars]|r " .. string.format(L.mbAdded, templateName))
+    end
+
 
     local catalogEntries = {}
+    local templateEntries = {
+        {
+            spellID = 0,
+            name = L.mbTemplateStack or "层数条模版",
+            icon = TEMPLATE_ICON,
+            unit = "player",
+            barType = "stack",
+            monitored = false,
+        },
+        {
+            spellID = 0,
+            name = L.mbTemplateCharge or "充能条模版",
+            icon = TEMPLATE_ICON,
+            unit = "player",
+            barType = "charge",
+            monitored = false,
+        },
+        {
+            spellID = 0,
+            name = L.mbTemplateDuration or "时间条模版",
+            icon = TEMPLATE_ICON,
+            unit = "player",
+            barType = "duration",
+            monitored = false,
+        },
+    }
     local monitoredSpellIDs = {}
     for _, bar in ipairs(cfg.bars or {}) do
         if bar and bar.spellID and bar.spellID > 0 then
@@ -1802,6 +1846,13 @@ local function ShowCatalog(rebuildTab)
     catalogFrame = ns.UI.OpenSpellCatalogFrame(
         L.mbScanCatalog,
         {
+            {
+                heading  = L.mbTemplateSection or "模版",
+                entries  = templateEntries,
+                onSelect = function(entry)
+                    AddTemplateBar(entry.barType or "stack", entry.name or "")
+                end,
+            },
             {
                 heading  = "",
                 entries  = catalogEntries,

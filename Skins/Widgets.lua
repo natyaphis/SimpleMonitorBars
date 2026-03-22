@@ -104,14 +104,24 @@ function ns.UI.OpenSpellCatalogFrame(title, sections, onManualAdd)
     for _, section in ipairs(sections) do
         if section.entries and #section.entries > 0 then
             hasAny = true
+            if section.heading and section.heading ~= "" then
+                local heading = AceGUI:Create("Heading")
+                heading:SetText(section.heading)
+                heading:SetFullWidth(true)
+                scroll:AddChild(heading)
+            end
             for _, entry in ipairs(section.entries) do
                 local btn = AceGUI:Create("InteractiveLabel")
                 local tex = entry.icon and ("|T" .. entry.icon .. ":16:16:0:0|t ") or ""
+                local spellIDSuffix = ""
+                if entry.spellID and entry.spellID > 0 then
+                    spellIDSuffix = "  |cff888888(" .. entry.spellID .. ")|r"
+                end
                 local monitoredSuffix = ""
                 if entry.monitored then
                     monitoredSuffix = " |cff00ccff- " .. ((ns.L and ns.L.mbAlreadyMonitored) or "Monitored") .. "|r"
                 end
-                btn:SetText(tex .. "|cffffffff" .. entry.name .. "|r  |cff888888(" .. entry.spellID .. ")|r" .. monitoredSuffix)
+                btn:SetText(tex .. "|cffffffff" .. entry.name .. "|r" .. spellIDSuffix .. monitoredSuffix)
                 btn:SetFullWidth(true)
                 btn:SetHighlight("Interface\\QuestFrame\\UI-QuestTitleHighlight")
                 btn:SetCallback("OnClick", function()
