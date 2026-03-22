@@ -18,7 +18,6 @@ ns._mbConst = {
 
 local spellToCooldownID = {}
 local cooldownIDToFrame = {}
-ns.cdmSuppressedCooldownIDs = {}
 
 MB._spellToCooldownID = spellToCooldownID
 MB._cooldownIDToFrame = cooldownIDToFrame
@@ -244,9 +243,6 @@ function MB:ScanCDMViewers()
     RefreshViewerCaches()
 
     self:PostScanHook()
-    if self.RebuildCDMSuppressedSet then
-        self:RebuildCDMSuppressedSet()
-    end
 end
 
 function MB.FindCDMFrame(cooldownID)

@@ -70,7 +70,6 @@ local function MigrateMonitorBars(profileData)
         maskAndBorderStyle = "1",
         borderStyle = "whole",
         segmentGap = 1,
-        hideFromCDM = false,
         showCondition = "always",
         frameStrata = "MEDIUM",
         textAnchor = "CENTER",

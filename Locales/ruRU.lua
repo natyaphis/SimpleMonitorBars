@@ -121,7 +121,6 @@ L.mbNoCurrentSpecBarNotice = "Внимание: для текущей специ
 L.mbScanCatalog = "Чтение каталога заклинаний"
 L.mbScanCombatWarn = "Нельзя сканировать в бою"
 L.mbBarTexture = "Текстура полосы"
-L.mbHideFromTracker = "Не показывать в списке отслеживания"
 L.mbColorThreshold = "Порог первого оттенка"
 L.mbThresholdColor = "Цвет первого оттенка"
 L.mbColorThreshold2 = "Порог второго оттенка"

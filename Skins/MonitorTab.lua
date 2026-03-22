@@ -300,7 +300,6 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         thresholdColor2 = { 1.0, 1.0, 0.0, 1 },
         borderStyle     = "whole",
         segmentGap      = 1,
-        hideFromCDM     = false,
         showCondition   = (barType == "duration") and "active_only" or "always",
         frameStrata     = "MEDIUM",
         textAnchor      = "CENTER",

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.4.4
+
+- Adjusted monitor bar runtime behavior and rendering logic.
+- Refined monitor settings and configuration handling.
+- Updated internal defaults and saved-data migration handling.
+- Updated localization text across supported locales.
+- Updated addon version metadata.
+
 ## 1.4.3
 
 - Refined monitor settings and configuration handling.

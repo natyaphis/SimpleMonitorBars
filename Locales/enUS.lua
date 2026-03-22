@@ -121,7 +121,6 @@ L.mbNoCurrentSpecBarNotice = "Note: no monitor bar is configured for the current
 L.mbScanCatalog = "Scan Spell Catalog"
 L.mbScanCombatWarn = "Cannot scan in combat"
 L.mbBarTexture = "Bar Texture"
-L.mbHideFromTracker = "Hide in tracker list"
 L.mbColorThreshold = "First Tint Threshold"
 L.mbThresholdColor = "First Tint Color"
 L.mbColorThreshold2 = "Second Tint Threshold"

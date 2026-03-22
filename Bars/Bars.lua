@@ -2051,39 +2051,9 @@ local function IsBarVisibleForSpec(barCfg)
     return false
 end
 
-function MB:RebuildCDMSuppressedSet()
-    -- Build the set of cooldown viewer entries hidden by user preference.
-    local suppressed = ns.cdmSuppressedCooldownIDs
-    wipe(suppressed)
-    local bars = ns.db and ns.db.monitorBars and ns.db.monitorBars.bars
-    if not bars then return end
-    for _, barCfg in ipairs(bars) do
-        if barCfg.enabled
-            and IsClassMatchedForCurrentPlayer(barCfg.class)
-            and barCfg.hideFromCDM
-            and barCfg.spellID > 0 then
-            local sid = barCfg.spellID
-            local cdID = spellToCooldownID[sid]
-
-            if not cdID and C_Spell and C_Spell.GetBaseSpell then
-                local baseID = C_Spell.GetBaseSpell(sid)
-                if baseID and baseID ~= sid then
-                    cdID = spellToCooldownID[baseID]
-                end
-            end
-            if cdID then
-                suppressed[cdID] = true
-            end
-        end
-    end
-
-end
-
 function MB:InitAllBars()
     local bars = ns.db and ns.db.monitorBars and ns.db.monitorBars.bars
     if not bars then return end
-
-    self:RebuildCDMSuppressedSet()
 
     for _, barCfg in ipairs(bars) do
         if barCfg.enabled
@@ -2133,7 +2103,6 @@ function MB:DestroyAllBars()
         f:SetParent(nil)
     end
     wipe(activeFrames)
-    wipe(ns.cdmSuppressedCooldownIDs)
     updateFrame:Hide()
 end
 

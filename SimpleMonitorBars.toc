@@ -3,20 +3,13 @@
 ## Notes: Monitor Bars for Cooldown/Aura Tracking
 ## Notes-zhCN: 冷却与增益监控条
 ## Author: NatYaphis
-## Version: 1.4.3
+## Version: 1.4.4
 ## SavedVariables: SimpleMonitorBarsDB
 ## IconTexture: Interface\AddOns\SimpleMonitorBars\Media\Icon
 ## Category: Combat
 ## Category-zhCN: 战斗
 ## Category-zhTW: 戰鬥
 ## Category-ruRU: Бой
-## Category-deDE: Kampf
-## Category-esES: Combate
-## Category-esMX: Combate
-## Category-frFR: Combat
-## Category-itIT: Combattimento
-## Category-ptBR: Combate
-## Category-ptPT: Combate
 ## Category-koKR: 전투
 
 Libs\libs.xml
