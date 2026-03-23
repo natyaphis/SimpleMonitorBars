@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Maintenance update.
+
 ## 1.4.4
 
 - Adjusted monitor bar runtime behavior and rendering logic.
@@ -49,10 +53,6 @@ All notable changes to this project will be documented in this file.
 
 - Adjusted linear duration bars so they now drain from full to empty by default, matching expected buff-duration behavior.
 - Kept `Reverse Growth` available for players who want the duration bar to fill in the opposite direction.
-
-## Unreleased
-
-- Maintenance update
 
 ## 1.3.4
 

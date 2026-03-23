@@ -1,0 +1,2 @@
+2026-03-23 
+    add a new feature to hide the bar only, but can display the timer
