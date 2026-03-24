@@ -2,13 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.4.6
+
+- Maintenance update.
+
 ## 1.4.5
 
 - Maintenance update.
 
 ## Unreleased
-
-- Maintenance update.
 
 ## 1.4.4
 
