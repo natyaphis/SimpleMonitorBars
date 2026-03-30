@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.5.0
+
+- Adjusted monitor bar runtime behavior and rendering logic.
+- Updated localization text across supported locales.
+
 ## 1.4.9
 
 - Adjusted monitor bar runtime behavior and rendering logic.

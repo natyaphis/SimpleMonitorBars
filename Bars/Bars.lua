@@ -1929,6 +1929,7 @@ UpdateDurationBar = function(barFrame)
     if not segs or #segs < 1 then return end
 
     local seg = segs[1]
+    local durationReady = false
 
     if auraActive and auraInstanceID and unit then
 
