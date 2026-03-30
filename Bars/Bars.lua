@@ -1071,7 +1071,11 @@ local function UpdateBarActiveState(barFrame, isActive)
     barFrame._isActive = (isActive == true)
     local cfg = barFrame._cfg
     if cfg and cfg.showCondition == "active_only" and wasActive ~= barFrame._isActive then
+        local locked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
         barFrame:SetShown(ShouldBarBeVisible(cfg, barFrame))
+        barFrame:SetAlpha(barFrame._isActive and 1 or 0)
+        barFrame:EnableMouse((not locked) and barFrame._isActive)
+        barFrame:EnableMouseWheel((not locked) and barFrame._isActive)
     end
 end
 
@@ -2081,8 +2085,30 @@ ShouldBarBeVisible = function(barCfg, barFrame)
     if cond == "target"          then return hasTarget end
     if cond == "dragonriding"    then return isDragonriding end
     if cond == "not_dragonriding" then return not isDragonriding end
-    if cond == "active_only"     then return barFrame and barFrame._isActive end
+    if cond == "active_only"     then return true end
     return true
+end
+
+local function RefreshBarPresentation(barFrame)
+    if not (barFrame and barFrame._cfg) then
+        return
+    end
+
+    local cfg = barFrame._cfg
+    local locked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
+    local visible = ShouldBarBeVisible(cfg, barFrame)
+    barFrame:SetShown(visible)
+
+    if visible and cfg.showCondition == "active_only" then
+        local active = (barFrame._isActive == true)
+        barFrame:SetAlpha(active and 1 or 0)
+        barFrame:EnableMouse((not locked) and active)
+        barFrame:EnableMouseWheel((not locked) and active)
+    else
+        barFrame:SetAlpha(1)
+        barFrame:EnableMouse(not locked)
+        barFrame:EnableMouseWheel(not locked)
+    end
 end
 
 local function IsBarVisibleForSpec(barCfg)
@@ -2121,11 +2147,7 @@ function MB:InitAllBars()
                 end
             end)
 
-            if ShouldBarBeVisible(barCfg, f) then
-                f:Show()
-            else
-                f:Hide()
-            end
+            RefreshBarPresentation(f)
         end
     end
 
@@ -2159,7 +2181,7 @@ end
 local function RefreshBarVisibility()
     for _, f in pairs(activeFrames) do
         if f._cfg then
-            f:SetShown(ShouldBarBeVisible(f._cfg, f))
+            RefreshBarPresentation(f)
         end
     end
 end
@@ -2266,7 +2288,7 @@ function MB:OnTargetChanged()
             if f._cfg.unit == "target" then
                 f._trackedAuraInstanceID = nil
             end
-            f:SetShown(ShouldBarBeVisible(f._cfg, f))
+            RefreshBarPresentation(f)
         end
     end
 end
@@ -2274,8 +2296,7 @@ end
 function MB:SetLocked(locked)
     ns.db.monitorBars.locked = locked
     for _, f in pairs(activeFrames) do
-        f:EnableMouse(not locked)
-        f:EnableMouseWheel(not locked)
+        RefreshBarPresentation(f)
     end
 end
 
