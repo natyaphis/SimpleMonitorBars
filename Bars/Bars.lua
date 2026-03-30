@@ -322,6 +322,34 @@ end
 local viewerSignalRegistry = {}
 local watcherIDsByFrame = {}
 local UpdateStackBar
+local UpdateDurationBar
+local pendingDurationRefresh = {}
+local durationFlushFrame = CreateFrame("Frame")
+
+local function QueueDurationRefresh(barFrame)
+    if not barFrame or not barFrame._barID then
+        return
+    end
+    pendingDurationRefresh[barFrame._barID] = true
+    durationFlushFrame:Show()
+end
+
+durationFlushFrame:Hide()
+durationFlushFrame:SetScript("OnUpdate", function(self)
+    self:Hide()
+    if not next(pendingDurationRefresh) then
+        return
+    end
+
+    for barID in pairs(pendingDurationRefresh) do
+        pendingDurationRefresh[barID] = nil
+        local barFrame = activeFrames[barID]
+        if barFrame and barFrame._cfg and barFrame._cfg.barType == "duration" then
+            barFrame._needsDurationRefresh = true
+            UpdateDurationBar(barFrame)
+        end
+    end
+end)
 
 local function OnCDMFrameChanged(frame)
     local ids = watcherIDsByFrame[frame]
@@ -332,7 +360,7 @@ local function OnCDMFrameChanged(frame)
             if f._cfg.barType == "stack" then
                 UpdateStackBar(f)
             elseif f._cfg.barType == "duration" then
-                f._needsDurationRefresh = true
+                QueueDurationRefresh(f)
             end
         end
     end
@@ -1497,6 +1525,7 @@ local function UpdateRegularCooldownBar(barFrame)
     if not segs or #segs < 1 then return end
 
     local seg = segs[1]
+    local durationReady = false
     local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
     local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.ElapsedTime or 0
 
@@ -1810,46 +1839,57 @@ local function UpdateChargeBar(barFrame)
     UpdateBarActiveState(barFrame, type(exactCharges) == "number" and exactCharges < maxCharges)
 end
 
-local function UpdateDurationBar(barFrame)
+UpdateDurationBar = function(barFrame)
     local cfg = barFrame._cfg
     if not cfg or cfg.barType ~= "duration" then return end
 
     HideChargeVisuals(barFrame)
 
-    local spellID = cfg.spellID
+    local spellID = ResolveRuntimeSpellID(cfg.spellID or 0) or cfg.spellID
     if not spellID or spellID <= 0 then return end
 
     local auraActive = false
     local cooldownID = spellToCooldownID[spellID]
+    if not cooldownID and cfg.spellID and cfg.spellID > 0 then
+        cooldownID = spellToCooldownID[cfg.spellID]
+    end
+    if not cooldownID then
+        cooldownID = ResolveTrackedCooldownID(spellID)
+    end
+    if not cooldownID and cfg.spellID and cfg.spellID ~= spellID then
+        cooldownID = ResolveTrackedCooldownID(cfg.spellID)
+    end
     barFrame._cooldownID = cooldownID
 
     local cdmFrame = nil
     local auraInstanceID = nil
     local unit = nil
 
-    -- Prefer direct aura reads so duration bars work without requiring the
-    -- Blizzard cooldown viewer to track the buff first.
     local primaryUnit = cfg.unit or "player"
     local otherUnit = (primaryUnit == "player") and "target" or "player"
 
-    local auraData = FindHelpfulAuraBySpellID(primaryUnit, spellID)
-    if auraData then
-        auraActive = true
-        auraInstanceID = auraData.auraInstanceID
-        unit = primaryUnit
-        barFrame._trackedAuraInstanceID = auraData.auraInstanceID
-        barFrame._trackedUnit = primaryUnit
-    else
-        auraData = FindHelpfulAuraBySpellID(otherUnit, spellID)
-        if auraData then
-            auraActive = true
-            auraInstanceID = auraData.auraInstanceID
-            unit = otherUnit
-            barFrame._trackedAuraInstanceID = auraData.auraInstanceID
-            barFrame._trackedUnit = otherUnit
+    -- Follow the more stable VFlow order:
+    -- 1. CDM frame instance id
+    -- 2. previously tracked aura instance id
+    -- 3. direct aura scan fallback
+    if cooldownID then
+        cdmFrame = FindCDMFrame(cooldownID)
+        if cdmFrame then
+            RegisterViewerSignals(cdmFrame, barFrame._barID)
+            barFrame._cdmFrame = cdmFrame
+
+            if HasAuraInstanceID(cdmFrame.auraInstanceID) then
+                local viewerUnit = cdmFrame.auraDataUnit or primaryUnit
+                auraActive = true
+                auraInstanceID = cdmFrame.auraInstanceID
+                unit = viewerUnit
+                barFrame._trackedAuraInstanceID = auraInstanceID
+                barFrame._trackedUnit = viewerUnit
+            end
         end
     end
 
+    local auraData = nil
     if not auraActive and HasAuraInstanceID(barFrame._trackedAuraInstanceID) then
         auraData, unit = GetAuraDataByInstanceID(barFrame._trackedAuraInstanceID, barFrame._trackedUnit, primaryUnit)
         if auraData then
@@ -1859,21 +1899,22 @@ local function UpdateDurationBar(barFrame)
         end
     end
 
-    if not auraActive and cooldownID then
-        cdmFrame = FindCDMFrame(cooldownID)
-        if cdmFrame then
-            RegisterViewerSignals(cdmFrame, barFrame._barID)
-            barFrame._cdmFrame = cdmFrame
-
-            if HasAuraInstanceID(cdmFrame.auraInstanceID) then
-                local viewerUnit = cdmFrame.auraDataUnit or primaryUnit
-                auraData, unit = GetAuraDataByInstanceID(cdmFrame.auraInstanceID, viewerUnit, otherUnit)
-                if auraData then
-                    auraActive = true
-                    auraInstanceID = cdmFrame.auraInstanceID
-                    barFrame._trackedAuraInstanceID = auraInstanceID
-                    barFrame._trackedUnit = unit
-                end
+    if not auraActive then
+        auraData = FindHelpfulAuraBySpellID(primaryUnit, spellID)
+        if auraData then
+            auraActive = true
+            auraInstanceID = auraData.auraInstanceID
+            unit = primaryUnit
+            barFrame._trackedAuraInstanceID = auraData.auraInstanceID
+            barFrame._trackedUnit = primaryUnit
+        else
+            auraData = FindHelpfulAuraBySpellID(otherUnit, spellID)
+            if auraData then
+                auraActive = true
+                auraInstanceID = auraData.auraInstanceID
+                unit = otherUnit
+                barFrame._trackedAuraInstanceID = auraData.auraInstanceID
+                barFrame._trackedUnit = otherUnit
             end
         end
     end
@@ -1896,6 +1937,8 @@ local function UpdateDurationBar(barFrame)
                 if not ApplyDurationTimer(seg, durObj, cfg) then
                     seg:SetMinMaxValues(0, 1)
                     seg:SetValue(1)
+                else
+                    durationReady = true
                 end
 
                 local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
@@ -1945,7 +1988,7 @@ local function UpdateDurationBar(barFrame)
     end
 
 
-    UpdateBarActiveState(barFrame, auraActive)
+    UpdateBarActiveState(barFrame, durationReady)
 end
 
 
@@ -2187,14 +2230,12 @@ function MB:OnAuraUpdate(unit, updateInfo)
             local matched = (cfgUnit == unit)
             if matched then
                 if f._cfg.barType == "duration" then
-                    f._needsDurationRefresh = true
-                    UpdateDurationBar(f)
+                    QueueDurationRefresh(f)
                 elseif f._cfg.barType == "stack" then
                     RefreshStackBarForAuraUpdate(f)
                 end
             elseif f._cfg.barType == "duration" and unit == "target" and cfgUnit == "player" then
-
-                f._needsDurationRefresh = true
+                QueueDurationRefresh(f)
             elseif f._cfg.barType == "stack" and unit == "target" and cfgUnit == "player" then
 
                 RefreshStackBarForAuraUpdate(f)
@@ -2202,8 +2243,7 @@ function MB:OnAuraUpdate(unit, updateInfo)
 
                 RefreshStackBarForAuraUpdate(f)
             elseif f._cfg.barType == "duration" and unit == "player" and cfgUnit == "target" then
-                f._needsDurationRefresh = true
-                UpdateDurationBar(f)
+                QueueDurationRefresh(f)
             end
         end
     end
