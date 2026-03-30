@@ -288,12 +288,12 @@ local function RestoreNativeFrame(frame, isAuraViewer)
     end
 end
 
-local function HideNativeFrame(frame)
+local function HideNativeFrame(frame, isAuraViewer)
     if not frame then
         return
     end
     nativeHiddenFrames[frame] = true
-    if frame.Hide then
+    if not isAuraViewer and frame.Hide then
         frame:Hide()
     end
     if frame.SetAlpha then
@@ -411,7 +411,7 @@ function MB:RefreshNativeViewerVisibility()
         EnsureViewerHooks(viewer)
         IterateViewerFrames(viewer, function(frame)
             if ShouldHideNativeFrame(frame, hiddenSpellSet) then
-                HideNativeFrame(frame)
+                HideNativeFrame(frame, source.aura)
             else
                 RestoreNativeFrame(frame, source.aura)
             end

@@ -1945,7 +1945,6 @@ UpdateDurationBar = function(barFrame)
                 local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
                 seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
 
-
                 if cfg.showText ~= false and barFrame._text then
                     local remaining = durObj:GetRemainingDuration()
 
