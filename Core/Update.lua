@@ -3,6 +3,7 @@
 local _, ns = ...
 
 local DeepCopy = ns.DeepCopy
+local GetMonitorBarDefaults = ns.GetMonitorBarDefaults
 local SIMPLE_TEXT_ANCHORS = {
     LEFT = true,
     CENTER = true,
@@ -27,61 +28,17 @@ local function MigrateMonitorBars(profileData)
         profileData.monitorBars.bars = bars
     end
 
-    -- Fill missing keys for each bar while preserving user values.
-    local barDefaults = {
-        enabled = true,
-        class = "ALL",
-        barType = "stack",
-        spellID = 0,
-        spellName = "",
-        unit = "player",
-        maxStacks = 5,
-        maxCharges = 2,
-        isChargeSpell = nil,
-        maxDuration = 60,
-        width = 200,
-        height = 20,
-        barShape = "Bar",
-        posX = 0,
-        posY = 0,
-        barColor = { 0.4, 0.75, 1.0, 1 },
-        bgColor = { 0.1, 0.1, 0.1, 0.6 },
-        borderColor = { 0, 0, 0, 1 },
-        showIcon = false,
-        showText = false,
-        textAlign = "CENTER",
-        textOffsetX = 0,
-        textOffsetY = 0,
-        fontName = "",
-        fontSize = 14,
-        outline = "OUTLINE",
-        showCountText = false,
-        countTextAnchor = "LEFT",
-        countTextOffsetX = 0,
-        countTextOffsetY = 0,
-        countFontName = "",
-        countFontSize = 14,
-        countOutline = "OUTLINE",
-        barTexture = "Solid",
-        colorThreshold = 0,
-        thresholdColor = { 1.0, 1.0, 1.0, 1 },
-        colorThreshold2 = 0,
-        thresholdColor2 = { 1.0, 1.0, 0.0, 1 },
-        maskAndBorderStyle = "1",
-        borderStyle = "whole",
-        segmentGap = 1,
-        showCondition = "always",
-        hideInNativeCooldownViewer = false,
-        frameStrata = "MEDIUM",
-        textAnchor = "CENTER",
-        smoothAnimation = true,
-        nameAnchor = "RIGHT",
-        specs = {},
-    }
-
     local maxID = 0
     for _, bar in ipairs(bars) do
         if type(bar) == "table" then
+            local barDefaults = GetMonitorBarDefaults({
+                class = "ALL",
+                maxCharges = 2,
+                width = 200,
+                height = 20,
+                showCondition = "always",
+                specs = {},
+            })
             for k, v in pairs(barDefaults) do
                 if bar[k] == nil then
                     bar[k] = DeepCopy(v)
@@ -91,7 +48,7 @@ local function MigrateMonitorBars(profileData)
             bar.countTextAnchor = NormalizeSimpleTextAnchor(bar.countTextAnchor, "LEFT")
             bar.textAnchor = NormalizeSimpleTextAnchor(bar.textAnchor or bar.textAlign, "CENTER")
             bar.textAlign = bar.textAnchor
-            bar.barShape = "Bar"
+            bar.barShape = nil
             bar.ringThickness = nil
             if type(bar.id) ~= "number" then
                 maxID = maxID + 1

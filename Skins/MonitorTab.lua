@@ -4,6 +4,7 @@ local _, ns = ...
 
 local L   = ns.L
 local MB  = ns.MonitorBars
+local GetMonitorBarDefaults = ns.GetMonitorBarDefaults
 local AceGUI
 local LSM
 
@@ -254,64 +255,17 @@ local function RegisterTextureDropdownItem()
 end
 
 local function NewBarDefaults(id, barType, spellID, spellName, unit)
-    local playerClass = select(2, UnitClass("player"))
-    return {
-        id         = id,
-        enabled    = true,
-        class      = playerClass,
-        barType    = barType or "stack",
-        spellID    = spellID or 0,
-        spellName  = spellName or "",
-        unit       = unit or "player",
-        maxStacks  = 5,
+    return GetMonitorBarDefaults({
+        id = id,
+        barType = barType,
+        spellID = spellID,
+        spellName = spellName,
+        unit = unit,
         maxCharges = 0,
         isChargeSpell = (barType == "charge"),
-        maxDuration = 60,
-        width      = 300,
-        height     = 15,
-        barShape   = "Bar",
-        verticalBar = false,
-        reverseGrowth = false,
-        posX       = 0,
-        posY       = 0,
-        barColor    = { 0.4, 0.75, 1.0, 1 },
-        bgColor     = { 0.1, 0.1, 0.1, 0.6 },
-        borderColor = { 0, 0, 0, 1 },
-        maskAndBorderStyle = "1",
-        showIcon   = false,
-        showText   = false,
-        textAlign  = "CENTER",
-        textOffsetX = 0,
-        textOffsetY = 0,
-        fontName   = "",
-        fontSize   = 14,
-        outline    = "OUTLINE",
-        showCountText = false,
-        countTextAnchor = "LEFT",
-        countTextOffsetX = 0,
-        countTextOffsetY = 0,
-        countFontName = "",
-        countFontSize = 14,
-        countOutline = "OUTLINE",
-        barTexture = "Solid",
-        colorThreshold  = 0,
-        thresholdColor  = { 1.0, 1.0, 1.0, 1 },
-        colorThreshold2 = 0,
-        thresholdColor2 = { 1.0, 1.0, 0.0, 1 },
-        borderStyle     = "whole",
-        segmentGap      = 1,
-        showCondition   = (barType == "duration") and "active_only" or "always",
-        hideInNativeCooldownViewer = false,
-        frameStrata     = "MEDIUM",
-        textAnchor      = "CENTER",
-        smoothAnimation = true,
-        showSpellName  = false,
-        nameAnchor     = "RIGHT",
-        nameOutline    = "OUTLINE",
-        nameFontName   = "",
-        nameFontSize   = 14,
-        specs           = { GetSpecialization() or 1 },
-    }
+        showCondition = (barType == "duration") and "active_only" or "always",
+        specs = { GetSpecialization() or 1 },
+    })
 end
 
 local function ResetBarToDefaults(barCfg)
@@ -813,7 +767,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     typeDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     typeDD:SetCallback("OnValueChanged", function(_, _, val)
         barCfg.barType = val
-        barCfg.barShape = "Bar"
         MB:RebuildAllBars()
         rebuildAll()
     end)

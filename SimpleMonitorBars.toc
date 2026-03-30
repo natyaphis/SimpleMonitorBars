@@ -3,7 +3,7 @@
 ## Notes: Monitor Bars for Cooldown/Aura Tracking
 ## Notes-zhCN: 冷却与增益监控条
 ## Author: NatYaphis
-## Version: 1.5.0
+## Version: 1.5.1
 ## SavedVariables: SimpleMonitorBarsDB
 ## IconTexture: Interface\AddOns\SimpleMonitorBars\Media\Icon
 ## Category: Combat
@@ -20,7 +20,7 @@ Locales\ruRU.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
 Core\Defaults.lua
-Core\Profiling.lua
+Core\ImportExport.lua
 Core\Update.lua
 Core\Config.lua
 Bars\Bridge.lua

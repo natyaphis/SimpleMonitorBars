@@ -1,5 +1,5 @@
 
--- Export/import utilities: Lua table serialization + Base64 transport format.
+-- Import/export utilities: Lua table serialization + Base64 transport format.
 local _, ns = ...
 
 local DeepCopy = ns.DeepCopy

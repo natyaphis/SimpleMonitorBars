@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.5.1
+
+- Refined monitor settings and configuration handling.
+- Updated internal defaults and saved-data migration handling.
+- Updated addon version metadata.
+
 ## 1.5.0
 
 - Adjusted monitor bar runtime behavior and rendering logic.
