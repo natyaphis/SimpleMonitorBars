@@ -71,6 +71,7 @@ local function MigrateMonitorBars(profileData)
         borderStyle = "whole",
         segmentGap = 1,
         showCondition = "always",
+        hideInNativeCooldownViewer = false,
         frameStrata = "MEDIUM",
         textAnchor = "CENTER",
         smoothAnimation = true,

@@ -18,9 +18,24 @@ ns._mbConst = {
 
 local spellToCooldownID = {}
 local cooldownIDToFrame = {}
+local nativeHiddenFrames = setmetatable({}, { __mode = "k" })
+local viewerHooksInstalled = setmetatable({}, { __mode = "k" })
+local nativeRefreshFrame = CreateFrame("Frame")
 
 MB._spellToCooldownID = spellToCooldownID
 MB._cooldownIDToFrame = cooldownIDToFrame
+
+local function QueueNativeVisibilityRefresh()
+    nativeRefreshFrame:Show()
+end
+
+nativeRefreshFrame:Hide()
+nativeRefreshFrame:SetScript("OnUpdate", function(self)
+    self:Hide()
+    if MB.RefreshNativeViewerVisibility then
+        MB:RefreshNativeViewerVisibility()
+    end
+end)
 
 local function HasAuraInstanceID(value)
     if value == nil then return false end
@@ -167,6 +182,147 @@ local function IterateViewerSources(visit)
     end
 end
 
+local function BuildHiddenSpellSet()
+    local hidden = {}
+    local bars = ns.db and ns.db.monitorBars and ns.db.monitorBars.bars
+    if type(bars) ~= "table" then
+        return hidden
+    end
+
+    for _, barCfg in ipairs(bars) do
+        if type(barCfg) == "table"
+            and barCfg.enabled ~= false
+            and barCfg.hideInNativeCooldownViewer == true
+            and type(barCfg.spellID) == "number"
+            and barCfg.spellID > 0 then
+            hidden[barCfg.spellID] = true
+            if C_Spell and C_Spell.GetBaseSpell then
+                local baseID = C_Spell.GetBaseSpell(barCfg.spellID)
+                if type(baseID) == "number" and baseID > 0 then
+                    hidden[baseID] = true
+                end
+            end
+            if C_Spell and C_Spell.GetOverrideSpell then
+                local overrideID = C_Spell.GetOverrideSpell(barCfg.spellID)
+                if type(overrideID) == "number" and overrideID > 0 then
+                    hidden[overrideID] = true
+                end
+            end
+        end
+    end
+
+    return hidden
+end
+
+local function IsPositiveSpellID(spellID)
+    if spellID == nil then
+        return false
+    end
+    if issecretvalue and issecretvalue(spellID) then
+        return false
+    end
+    return type(spellID) == "number" and spellID > 0
+end
+
+local function AddSpellCandidate(candidates, spellID)
+    if IsPositiveSpellID(spellID) then
+        candidates[#candidates + 1] = spellID
+    end
+end
+
+local function CollectFrameSpellCandidates(frame)
+    local candidates = {}
+    if not frame then
+        return candidates
+    end
+
+    if frame.GetSpellID then
+        AddSpellCandidate(candidates, frame:GetSpellID())
+    end
+    if frame.GetAuraSpellID then
+        AddSpellCandidate(candidates, frame:GetAuraSpellID())
+    end
+
+    local cdID = GetCooldownIDFromFrame(frame)
+    if cdID and C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo then
+        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+        if info then
+            AddSpellCandidate(candidates, info.overrideSpellID)
+            if info.linkedSpellIDs then
+                for _, linkedSpellID in ipairs(info.linkedSpellIDs) do
+                    AddSpellCandidate(candidates, linkedSpellID)
+                end
+            end
+            AddSpellCandidate(candidates, ResolveSpellID(info))
+            AddSpellCandidate(candidates, info.spellID)
+        end
+    end
+
+    return candidates
+end
+
+local function ShouldHideNativeFrame(frame, hiddenSpellSet)
+    if not frame then
+        return false
+    end
+
+    for _, spellID in ipairs(CollectFrameSpellCandidates(frame)) do
+        if hiddenSpellSet[spellID] then
+            return true
+        end
+    end
+    return false
+end
+
+local function RestoreNativeFrame(frame, isAuraViewer)
+    if not nativeHiddenFrames[frame] then
+        return
+    end
+
+    nativeHiddenFrames[frame] = nil
+    if frame.SetAlpha and frame:GetAlpha() < 0.1 then
+        frame:SetAlpha(1)
+    end
+    if not isAuraViewer and frame.Show and not frame:IsShown() then
+        frame:Show()
+    end
+end
+
+local function HideNativeFrame(frame)
+    if not frame then
+        return
+    end
+    nativeHiddenFrames[frame] = true
+    if frame.Hide then
+        frame:Hide()
+    end
+    if frame.SetAlpha then
+        frame:SetAlpha(0)
+    end
+end
+
+local function EnsureViewerHooks(viewer)
+    if not viewer or viewerHooksInstalled[viewer] then
+        return
+    end
+
+    if viewer.RefreshData then
+        hooksecurefunc(viewer, "RefreshData", QueueNativeVisibilityRefresh)
+    end
+    if viewer.RefreshLayout then
+        hooksecurefunc(viewer, "RefreshLayout", QueueNativeVisibilityRefresh)
+    end
+    if viewer.OnAcquireItemFrame then
+        hooksecurefunc(viewer, "OnAcquireItemFrame", QueueNativeVisibilityRefresh)
+    end
+    if viewer.itemFramePool then
+        hooksecurefunc(viewer.itemFramePool, "Acquire", QueueNativeVisibilityRefresh)
+        hooksecurefunc(viewer.itemFramePool, "Release", QueueNativeVisibilityRefresh)
+    end
+
+    viewerHooksInstalled[viewer] = true
+end
+
 local function ResetViewerCaches()
     wipe(spellToCooldownID)
     wipe(cooldownIDToFrame)
@@ -241,8 +397,26 @@ function MB:ScanCDMViewers()
     if InCombatLockdown() then return end
 
     RefreshViewerCaches()
+    IterateViewerSources(function(viewer)
+        EnsureViewerHooks(viewer)
+    end)
 
     self:PostScanHook()
+end
+
+function MB:RefreshNativeViewerVisibility()
+    local hiddenSpellSet = BuildHiddenSpellSet()
+
+    IterateViewerSources(function(viewer, source)
+        EnsureViewerHooks(viewer)
+        IterateViewerFrames(viewer, function(frame)
+            if ShouldHideNativeFrame(frame, hiddenSpellSet) then
+                HideNativeFrame(frame)
+            else
+                RestoreNativeFrame(frame, source.aura)
+            end
+        end)
+    end)
 end
 
 function MB.FindCDMFrame(cooldownID)

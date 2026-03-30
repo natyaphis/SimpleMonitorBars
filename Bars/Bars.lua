@@ -414,6 +414,7 @@ end
 function MB:PostScanHook()
     ResetViewerSignals()
     RebindStackWatchers()
+    self:RefreshNativeViewerVisibility()
 end
 
 
@@ -2152,6 +2153,7 @@ end
 function MB:RebuildAllBars()
     self:DestroyAllBars()
     self:InitAllBars()
+    self:RefreshNativeViewerVisibility()
 end
 
 local function RefreshBarVisibility()

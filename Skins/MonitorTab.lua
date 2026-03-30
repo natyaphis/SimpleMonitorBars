@@ -301,6 +301,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         borderStyle     = "whole",
         segmentGap      = 1,
         showCondition   = (barType == "duration") and "active_only" or "always",
+        hideInNativeCooldownViewer = false,
         frameStrata     = "MEDIUM",
         textAnchor      = "CENTER",
         smoothAnimation = true,
@@ -736,6 +737,26 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end)
     SetResetButtonText()
     topActionRow:AddChild(resetBtn)
+
+    local nativeHideRow = AddTwoColumnRow(container)
+    nativeHideRow.noAutoHeight = true
+    nativeHideRow:SetHeight(COMPACT_ROW_HEIGHT)
+
+    local nativeHideCB = AceGUI:Create("CheckBox")
+    nativeHideCB:SetLabel(L.mbHideNativeCooldownViewer or "Hide Blizzard native cooldown monitor icon or bar")
+    nativeHideCB:SetValue(barCfg.hideInNativeCooldownViewer == true)
+    nativeHideCB:SetFullWidth(true)
+    nativeHideCB:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.hideInNativeCooldownViewer = (val == true)
+        MB:RebuildAllBars()
+    end)
+    nativeHideRow:AddChild(nativeHideCB)
+
+    local nativeHideHint = AceGUI:Create("Label")
+    nativeHideHint:SetText("|cff888888" .. (L.mbHideNativeCooldownViewerHint or "Reload UI after changing this setting.") .. "|r")
+    nativeHideHint:SetFullWidth(true)
+    nativeHideHint.label:SetJustifyH("CENTER")
+    container:AddChild(nativeHideHint)
 
     AddMonitorHeading(container, "触发设置")
 
