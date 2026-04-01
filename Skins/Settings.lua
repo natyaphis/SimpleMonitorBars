@@ -203,6 +203,8 @@ local function ToggleSettings()
     tabs:SetLayout("Fill")
     tabs:SetCallback("OnGroupSelected", OnTabSelected)
     frame:AddChild(tabs)
+    frame._smbTabs = tabs
+    ns._settingsTabs = tabs
 
     C_Timer.After(0, function()
         AdjustSettingsTabs(tabs)
@@ -289,6 +291,7 @@ local function ToggleSettings()
         btnAdvanced:Release()
         btnClose:Release()
         ns._refreshSelectedBarNotice = nil
+        ns._settingsTabs = nil
         widget:Release()
         ns._settingsFrame = nil
     end)
@@ -298,6 +301,26 @@ local function ToggleSettings()
 end
 
 ns.ToggleSettings = ToggleSettings
+
+function ns.OpenMonitorBarSettings(barID)
+    if type(barID) == "number" and type(ns.SetSelectedMonitorBarID) == "function" then
+        ns.SetSelectedMonitorBarID(barID)
+    end
+
+    if not ns._settingsFrame then
+        ToggleSettings()
+    end
+
+    local tabs = ns._settingsTabs or (ns._settingsFrame and ns._settingsFrame._smbTabs)
+    if tabs and tabs.SelectTab then
+        tabs:SelectTab("monitorBars")
+    end
+
+    if ns._settingsFrame and ns._settingsFrame.frame then
+        ns._settingsFrame.frame:Show()
+        ns._settingsFrame.frame:Raise()
+    end
+end
 
 function ns:InitSettings()
     -- Register slash commands and the Blizzard Settings category entry.

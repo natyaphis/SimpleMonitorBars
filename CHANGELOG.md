@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.5.6
+
+- Release SimpleMonitorBars v1.5.5
+- Release SimpleMonitorBars v1.5.4
+- Release SimpleMonitorBars v1.5.3
+- Release SimpleMonitorBars v1.5.2
+- Release SimpleMonitorBars v1.5.0
+- Release SimpleMonitorBars v1.3.7
+- Release SimpleMonitorBars v1.3.3
+- Release SimpleMonitorBars v1.3.2
+- Release SimpleMonitorBars v1.3.1
+- Release SimpleMonitorBars v1.2.1
+- Adjust spell catalog dialog height and remove footer notice
+- Release v1.2.0
+- Release v1.1.8
+- Release v1.1.7
+- Ignore local scripts from git and release packages
+- Release v1.1.6
+- Release v1.1.5
+- Release v1.1.0
+- Release v1.0.5
+- Refine settings UI and localization
+- Fix settings window reopening content
+- Add release packaging workflow
+- Merge remote-tracking branch 'origin/main'
+- Initial commit
+- Adjusted monitor bar runtime behavior and rendering logic.
+- Refined monitor settings and configuration handling.
+- Updated localization text across supported locales.
+- Updated addon version metadata.
+
 ## 1.5.5
 
 - Adjust spell catalog dialog height and remove footer notice

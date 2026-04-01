@@ -127,6 +127,11 @@ local function RefreshSelectedBarNotice()
     end
 end
 
+function ns.SetSelectedMonitorBarID(barID)
+    selectedBarID = barID
+    RefreshSelectedBarNotice()
+end
+
 local function IsClassMatchedForCurrentPlayer(classTag)
     if classTag == nil or classTag == "" or classTag == "ALL" then
         return true
@@ -618,6 +623,9 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         else
             barCfg.maskAndBorderStyle = "1"
         end
+    end
+    if barCfg.barType == "duration" and (barCfg.borderStyle == nil or barCfg.borderStyle == "segment") then
+        barCfg.borderStyle = "whole"
     end
 
     local function Refresh()
@@ -1130,7 +1138,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     local bgColorPicker = AceGUI:Create("ColorPicker")
     bgColorPicker:SetLabel(L.mbBgColor)
     bgColorPicker:SetHasAlpha(true)
-    bgColorPicker:SetRelativeWidth(0.48)
+    bgColorPicker:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     local bgc = barCfg.bgColor or { 0.1, 0.1, 0.1, 0.6 }
     bgColorPicker:SetColor(bgc[1], bgc[2], bgc[3], bgc[4])
     local function OnBgColor(_, _, r, g, b, a)
@@ -1144,7 +1152,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     local borderColorPicker = AceGUI:Create("ColorPicker")
     borderColorPicker:SetLabel(L.mbBorderColor)
     borderColorPicker:SetHasAlpha(true)
-    borderColorPicker:SetRelativeWidth(0.48)
+    borderColorPicker:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     local bdc = barCfg.borderColor or { 0, 0, 0, 1 }
     borderColorPicker:SetColor(bdc[1], bdc[2], bdc[3], bdc[4])
     local function OnBorderColor(_, _, r, g, b, a)
@@ -1186,6 +1194,18 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             MB:RebuildAllBars()
         end)
         borderRow:AddChild(mbsDD)
+    else
+        local mbsDD = AceGUI:Create("Dropdown")
+        mbsDD:SetLabel(L.mbMaskAndBorderStyle or "Border Width")
+        mbsDD:SetList(MASK_AND_BORDER_STYLE_ITEMS, { "0", "1", "2", "3", "4", "5" })
+        mbsDD:SetValue(barCfg.maskAndBorderStyle or "1")
+        mbsDD:SetFullWidth(true)
+        mbsDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.borderStyle = "whole"
+            barCfg.maskAndBorderStyle = val
+            MB:RebuildAllBars()
+        end)
+        styleGroup:AddChild(mbsDD)
     end
 
 

@@ -234,7 +234,7 @@ local function AttachDragHandlers(frame, barCfg)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function(self)
         if ns.db.monitorBars.locked then return end
-
+        self._smbDragging = true
         self:SetToplevel(true)
         local frameScale = self:GetEffectiveScale()
         local cursorX, cursorY = GetCursorPosition()
@@ -263,6 +263,8 @@ local function AttachDragHandlers(frame, barCfg)
     end)
 
     frame:SetScript("OnDragStop", function(self)
+        self._smbDragging = nil
+        self._smbSuppressNextClick = true
         self:SetScript("OnUpdate", nil)
 
         local centerX, centerY = self:GetCenter()
@@ -296,6 +298,31 @@ local function AttachWheelHandlers(frame, barCfg)
     end)
 end
 
+local function AttachClickHandlers(frame, barCfg)
+    frame:SetScript("OnMouseUp", function(self, button)
+        if button ~= "LeftButton" then
+            return
+        end
+
+        if self._smbSuppressNextClick then
+            self._smbSuppressNextClick = nil
+            return
+        end
+
+        local now = GetTime()
+        local lastClickAt = self._smbLastClickAt or 0
+        if (now - lastClickAt) <= 0.35 then
+            self._smbLastClickAt = 0
+            if type(ns.OpenMonitorBarSettings) == "function" then
+                ns.OpenMonitorBarSettings(barCfg.id)
+            end
+            return
+        end
+
+        self._smbLastClickAt = now
+    end)
+end
+
 local function AttachTooltipHandlers(frame, barCfg)
     frame:SetScript("OnEnter", function(self)
         if ns.db.monitorBars.locked then return end
@@ -304,6 +331,7 @@ local function AttachTooltipHandlers(frame, barCfg)
         if name ~= "" then
             GameTooltip:AddLine(name, 1, 1, 1)
         end
+        GameTooltip:AddLine(ns.L.mbDoubleClickHint or "", 0.6, 0.8, 1)
         GameTooltip:AddLine(ns.L.mbNudgeHint or "", 0.6, 0.8, 1)
         GameTooltip:Show()
     end)
@@ -807,6 +835,7 @@ function MB:CreateBarFrame(barCfg)
     ConfigureCountText(f, barCfg)
     AttachDragHandlers(f, barCfg)
     AttachWheelHandlers(f, barCfg)
+    AttachClickHandlers(f, barCfg)
     AttachTooltipHandlers(f, barCfg)
 
     local locked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
@@ -939,7 +968,7 @@ function MB:ApplyStyle(barFrame)
     else
         barFrame._icon:SetPoint("LEFT", barFrame, "LEFT", 0, 0)
     end
-    local segOffset = showIcon and (iconSize + 2) or 0
+    local segOffset = showIcon and iconSize or 0
     barFrame._segContainer:ClearAllPoints()
     if iconOnRight then
         barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", 0, 0)
