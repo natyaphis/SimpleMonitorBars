@@ -592,7 +592,7 @@ end
 
 local function BuildBarConfig(container, barCfg, rebuildAll)
     barCfg.width = tonumber(barCfg.width) or 300
-    barCfg.height = tonumber(barCfg.height) or 15
+    barCfg.height = tonumber(barCfg.height) or 8
     barCfg.verticalBar = (barCfg.verticalBar == true)
     barCfg.reverseGrowth = (barCfg.reverseGrowth == true)
     barCfg.posX = tonumber(barCfg.posX) or 0

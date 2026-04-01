@@ -39,7 +39,7 @@ function ns.GetMonitorBarDefaults(options)
         isChargeSpell = options.isChargeSpell,
         maxDuration = 60,
         width = options.width or 300,
-        height = options.height or 15,
+        height = options.height or 8,
         verticalBar = false,
         reverseGrowth = false,
         posX = 0,

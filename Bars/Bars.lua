@@ -684,7 +684,8 @@ local function CreateSegments(barFrame, count, cfg)
         end
 
         if perSegBorder and borderSize > 0 then
-            local border = CreateFrame("Frame", nil, container, "BackdropTemplate")
+            local borderParent = barFrame._borderFrame or container
+            local border = CreateFrame("Frame", nil, borderParent, "BackdropTemplate")
             border:SetPoint("TOPLEFT", bar, "TOPLEFT", -borderSize, borderSize)
             border:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", borderSize, -borderSize)
             border:SetBackdrop({
@@ -701,7 +702,17 @@ local function CreateSegments(barFrame, count, cfg)
     end
 
     if perSegBorder then
-        if barFrame._mbBorder then barFrame._mbBorder:Hide() end
+        if barFrame._borderFrame then
+            barFrame._borderFrame:Show()
+        end
+        if barFrame._border then
+            barFrame._border:Hide()
+        end
+        if barFrame._fixedBorders then
+            for _, edge in pairs(barFrame._fixedBorders) do
+                edge:Hide()
+            end
+        end
     else
         MB.ApplyMaskAndBorderSettings(barFrame, cfg)
     end
@@ -930,8 +941,6 @@ function MB:ApplyStyle(barFrame)
 
     barFrame._icon:ClearAllPoints()
     barFrame._icon:SetPoint("LEFT", barFrame, "LEFT", 0, 0)
-    barFrame.bg:Show()
-
     local segOffset = showIcon and (iconSize + 2) or 0
     barFrame._segContainer:ClearAllPoints()
     barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
@@ -945,6 +954,9 @@ function MB:ApplyStyle(barFrame)
     else
         count = cfg.maxStacks
     end
+    local useSegmentBackgrounds = (cfg.barType == "stack" and (count or 0) > 1)
+    barFrame.bg:SetShown(not useSegmentBackgrounds)
+
     if count > 0 then
         C_Timer.After(0, function()
             if barFrame._segContainer then
@@ -969,7 +981,19 @@ function MB:ApplyStyle(barFrame)
     if cfg.borderStyle == "whole" then
         MB.ApplyMaskAndBorderSettings(barFrame, cfg)
     elseif barFrame._borderFrame then
-        barFrame._borderFrame:Hide()
+        if cfg.borderStyle == "segment" then
+            barFrame._borderFrame:Show()
+            if barFrame._border then
+                barFrame._border:Hide()
+            end
+            if barFrame._fixedBorders then
+                for _, edge in pairs(barFrame._fixedBorders) do
+                    edge:Hide()
+                end
+            end
+        else
+            barFrame._borderFrame:Hide()
+        end
     end
 
     if cfg.spellID and cfg.spellID > 0 then

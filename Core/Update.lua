@@ -35,7 +35,7 @@ local function MigrateMonitorBars(profileData)
                 class = "ALL",
                 maxCharges = 2,
                 width = 200,
-                height = 20,
+                height = 8,
                 showCondition = "always",
                 specs = {},
             })
