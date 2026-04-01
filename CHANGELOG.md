@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.5.5
+
+- Adjust spell catalog dialog height and remove footer notice
+- Ignore local scripts from git and release packages
+- Refine settings UI and localization
+- Fix settings window reopening content
+- Add release packaging workflow
+- Merge remote-tracking branch 'origin/main'
+- Initial commit
+- Adjusted monitor bar runtime behavior and rendering logic.
+- Refined monitor settings and configuration handling.
+- Updated internal defaults and saved-data migration handling.
+- Updated localization text across supported locales.
+- Updated addon version metadata.
+
 ## 1.5.4
 
 - Adjust spell catalog dialog height and remove footer notice

@@ -49,6 +49,7 @@ function ns.GetMonitorBarDefaults(options)
         borderColor = { 0, 0, 0, 1 },
         maskAndBorderStyle = "1",
         showIcon = false,
+        iconOnRight = false,
         showText = false,
         textAlign = "CENTER",
         textOffsetX = 0,

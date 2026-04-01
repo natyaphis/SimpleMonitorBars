@@ -595,6 +595,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     barCfg.height = tonumber(barCfg.height) or 8
     barCfg.verticalBar = (barCfg.verticalBar == true)
     barCfg.reverseGrowth = (barCfg.reverseGrowth == true)
+    barCfg.iconOnRight = (barCfg.iconOnRight == true)
     barCfg.posX = tonumber(barCfg.posX) or 0
     barCfg.posY = tonumber(barCfg.posY) or 0
 
@@ -1222,6 +1223,16 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         Refresh()
     end)
     skillToggleRow:AddChild(iconCB)
+
+    local iconSideCB = AceGUI:Create("CheckBox")
+    iconSideCB:SetLabel(L.mbIconOnRight or "Place Icon On Right")
+    iconSideCB:SetValue(barCfg.iconOnRight == true)
+    iconSideCB:SetFullWidth(true)
+    iconSideCB:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.iconOnRight = (val == true)
+        Refresh()
+    end)
+    styleGroup:AddChild(iconSideCB)
 
     local nameRow = AddTwoColumnRow(styleGroup)
 

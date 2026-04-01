@@ -61,7 +61,7 @@ local function ConfigureLinearStatusBar(bar, cfg)
     if bar.SetRotatesTexture then
         bar:SetRotatesTexture(isVertical)
     end
-    if bar.SetReverseFill and cfg.barType ~= "duration" then
+    if bar.SetReverseFill then
         bar:SetReverseFill(IsReverseGrowth(cfg))
     end
     if bar.GetStatusBarTexture then
@@ -70,9 +70,6 @@ local function ConfigureLinearStatusBar(bar, cfg)
 end
 
 local function GetDurationTimerDirection(cfg)
-    if IsReverseGrowth(cfg) then
-        return Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.ElapsedTime or 0
-    end
     return Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 1
 end
 
@@ -793,14 +790,10 @@ function MB:CreateBarFrame(barCfg)
     local iconSize = h
     f._icon = f:CreateTexture(nil, "ARTWORK")
     f._icon:SetSize(iconSize, iconSize)
-    f._icon:SetPoint("LEFT", f, "LEFT", 0, 0)
     f._icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     local showIcon = barCfg.showIcon ~= false
-    local segOffset = showIcon and (iconSize + 2) or 0
     f._segContainer = CreateFrame("Frame", nil, f)
-    f._segContainer:SetPoint("TOPLEFT", f, "TOPLEFT", segOffset, 0)
-    f._segContainer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
     f._segContainer:SetFrameLevel(f:GetFrameLevel() + 1)
     f._segContainer:SetClipsChildren(true)
 
@@ -940,11 +933,21 @@ function MB:ApplyStyle(barFrame)
     end
 
     barFrame._icon:ClearAllPoints()
-    barFrame._icon:SetPoint("LEFT", barFrame, "LEFT", 0, 0)
+    local iconOnRight = (cfg.iconOnRight == true)
+    if iconOnRight then
+        barFrame._icon:SetPoint("RIGHT", barFrame, "RIGHT", 0, 0)
+    else
+        barFrame._icon:SetPoint("LEFT", barFrame, "LEFT", 0, 0)
+    end
     local segOffset = showIcon and (iconSize + 2) or 0
     barFrame._segContainer:ClearAllPoints()
-    barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
-    barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", 0, 0)
+    if iconOnRight then
+        barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", 0, 0)
+        barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", -segOffset, 0)
+    else
+        barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
+        barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", 0, 0)
+    end
 
     local count
     if cfg.barType == "charge" then
