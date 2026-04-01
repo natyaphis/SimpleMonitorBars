@@ -14,20 +14,7 @@ function ns.BuildClassViewTab(scroll)
     content:SetLayout("Flow")
     scroll:AddChild(content)
 
-    local hint = AceGUI:Create("Label")
-    hint:SetText("|cffaaaaaa" .. (L.overviewAddHint or "") .. "|r")
-    hint:SetFullWidth(true)
-    hint:SetFontObject(GameFontHighlightSmall)
-    hint:SetJustifyH("CENTER")
-    content:AddChild(hint)
-
     if L.overviewBuffHint and L.overviewBuffHint ~= "" then
-        local hintSpacer = AceGUI:Create("Label")
-        hintSpacer:SetText(" ")
-        hintSpacer:SetFullWidth(true)
-        hintSpacer:SetHeight(8)
-        content:AddChild(hintSpacer)
-
         local buffHint = AceGUI:Create("Label")
         buffHint:SetText("|cffaaaaaa" .. L.overviewBuffHint .. "|r")
         buffHint:SetFullWidth(true)
