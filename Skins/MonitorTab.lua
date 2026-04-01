@@ -721,7 +721,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     nativeHideHint.label:SetJustifyH("CENTER")
     container:AddChild(nativeHideHint)
 
-    AddMonitorHeading(container, "触发设置")
+    AddMonitorHeading(container, L.mbTriggerSection or "触发设置")
 
     local spellRow = AddTwoColumnRow(container)
     spellRow.noAutoHeight = true
@@ -1016,7 +1016,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         syncingPositionSliders = false
     end
 
-    AddMonitorHeading(styleGroup, "材质染色")
+    AddMonitorHeading(styleGroup, L.mbTintSection or "材质染色")
 
     local hasTextureDropdown = false
     local texItems, texOrder = GetTextureItems()
@@ -1222,7 +1222,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(gapSlider)
     end
 
-    AddMonitorHeading(styleGroup, "技能文字")
+    AddMonitorHeading(styleGroup, L.mbSpellTextSection or "技能文字")
 
     local skillToggleRow = AddTwoColumnRow(styleGroup)
     skillToggleRow.noAutoHeight = true
@@ -1669,7 +1669,7 @@ local function ShowCatalog(rebuildTab)
 
     MB:ScanCDMViewers()
     local cooldowns, auras = MB:GetSpellCatalog()
-    local iciclesName = C_Spell.GetSpellName(ICICLES_SPELL_ID) or "小冰刺"
+    local iciclesName = C_Spell.GetSpellName(ICICLES_SPELL_ID) or (L.mbIciclesName or "Icicle")
     local iciclesIcon = C_Spell.GetSpellTexture(ICICLES_SPELL_ID)
 
     local function ContainsSpell(entries, spellID)
