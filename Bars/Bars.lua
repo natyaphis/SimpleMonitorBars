@@ -1738,10 +1738,7 @@ local function UpdateChargeBar(barFrame)
         barFrame._chargeBar._masked = true
     end
     local barColor = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
-    local fullChargeColor = cfg.fullChargeColor or barColor
-    local isFullyCharged = (type(exactCharges) == "number" and exactCharges >= maxCharges)
-    local mainChargeColor = isFullyCharged and fullChargeColor or barColor
-    barFrame._chargeBar:SetStatusBarColor(mainChargeColor[1], mainChargeColor[2], mainChargeColor[3], mainChargeColor[4])
+    barFrame._chargeBar:SetStatusBarColor(barColor[1], barColor[2], barColor[3], barColor[4])
     barFrame._chargeBar:SetMinMaxValues(0, maxCharges)
     barFrame._chargeBar:SetValue(currentCharges)
     barFrame._chargeBar:Show()

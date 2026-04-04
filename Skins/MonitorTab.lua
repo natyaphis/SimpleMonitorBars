@@ -1072,20 +1072,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         rechargeColorPicker:SetCallback("OnValueChanged", OnRechargeColor)
         rechargeColorPicker:SetCallback("OnValueConfirmed", OnRechargeColor)
         chargeColorRow:AddChild(rechargeColorPicker)
-
-        local fullChargeColorPicker = AceGUI:Create("ColorPicker")
-        fullChargeColorPicker:SetLabel(L.mbFullChargeColor or "Full Charge Color")
-        fullChargeColorPicker:SetHasAlpha(true)
-        fullChargeColorPicker:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
-        local fcc = barCfg.fullChargeColor or barCfg.barColor or { 0.4, 0.75, 1.0, 1 }
-        fullChargeColorPicker:SetColor(fcc[1], fcc[2], fcc[3], fcc[4])
-        local function OnFullChargeColor(_, _, r, g, b, a)
-            barCfg.fullChargeColor = { r, g, b, a }
-            MB:RebuildAllBars()
-        end
-        fullChargeColorPicker:SetCallback("OnValueChanged", OnFullChargeColor)
-        fullChargeColorPicker:SetCallback("OnValueConfirmed", OnFullChargeColor)
-        chargeColorRow:AddChild(fullChargeColorPicker)
     end
 
     if barCfg.barType == "stack" then

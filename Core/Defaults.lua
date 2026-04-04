@@ -46,7 +46,6 @@ function ns.GetMonitorBarDefaults(options)
         posY = 0,
         barColor = { 0.4, 0.75, 1.0, 1 },
         rechargeColor = { 0.4, 0.75, 1.0, 1 },
-        fullChargeColor = { 0.4, 0.75, 1.0, 1 },
         bgColor = { 0.1, 0.1, 0.1, 0.6 },
         borderColor = { 0, 0, 0, 1 },
         maskAndBorderStyle = "1",
