@@ -523,7 +523,6 @@ local function HideChargeVisuals(barFrame)
     if barFrame._chargeBG then barFrame._chargeBG:Hide() end
     if barFrame._chargeBar then barFrame._chargeBar:Hide() end
     if barFrame._refreshCharge then barFrame._refreshCharge:Hide() end
-    if barFrame._refreshChargeText then barFrame._refreshChargeText:SetText("") end
     if barFrame._chargeBorders then
         for _, border in ipairs(barFrame._chargeBorders) do
             border:Hide()
@@ -854,7 +853,6 @@ function MB:CreateBarFrame(barCfg)
     f._chargeBG = nil
     f._chargeBar = nil
     f._refreshCharge = nil
-    f._refreshChargeText = nil
     f._chargeBorders = nil
     f._trackedAuraInstanceID = nil
     f._trackedUnit = nil
@@ -1756,20 +1754,6 @@ local function UpdateChargeBar(barFrame)
         barFrame._refreshCharge:GetStatusBarTexture():AddMaskTexture(barFrame._mask)
         barFrame._refreshCharge._masked = true
     end
-    if not barFrame._refreshChargeText then
-        local txt = barFrame._refreshCharge:CreateFontString(nil, "OVERLAY")
-        txt:SetAllPoints(barFrame._refreshCharge)
-        txt:SetJustifyH("CENTER")
-        txt:SetFont(
-            ResolveFontPath(cfg.fontName),
-            cfg.fontSize or 14,
-            cfg.outline or "OUTLINE"
-        )
-        txt:SetTextColor(1, 1, 1, 1)
-        barFrame._refreshChargeText = txt
-    end
-    barFrame._refreshChargeText:SetShown(cfg.showText ~= false)
-
     local chargeDurObj = nil
     pcall(function()
         chargeDurObj = C_Spell.GetSpellChargeDuration(spellID)
@@ -1882,13 +1866,10 @@ local function UpdateChargeBar(barFrame)
     end
 
     if barFrame._text then
-        barFrame._text:SetText("")
-    end
-    if barFrame._refreshChargeText then
         if cfg.showText ~= false and shouldShowRecharge and activeChargeDurObj then
-            barFrame._refreshChargeText:SetText(FormatRemainingTimeText(activeChargeDurObj:GetRemainingDuration()))
+            barFrame._text:SetText(FormatRemainingTimeText(activeChargeDurObj:GetRemainingDuration()))
         else
-            barFrame._refreshChargeText:SetText("")
+            barFrame._text:SetText("")
         end
     end
     if type(exactCharges) == "number" then

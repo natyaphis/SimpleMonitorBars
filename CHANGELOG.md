@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.5.8
+
+- Adjusted monitor bar runtime behavior and rendering logic.
+- Updated localization text across supported locales.
+
 ## 1.5.7
 
 - Release SimpleMonitorBars v1.5.5
