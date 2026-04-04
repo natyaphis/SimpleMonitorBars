@@ -268,7 +268,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         unit = unit,
         maxCharges = 0,
         isChargeSpell = (barType == "charge"),
-        showCondition = (barType == "duration") and "active_only" or "always",
+        showCondition = "always",
         specs = { GetSpecialization() or 1 },
     })
 end
@@ -1053,7 +1053,42 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     barColorPicker:SetCallback("OnValueConfirmed", OnBarColor)
     styleGroup:AddChild(barColorPicker)
 
-    if barCfg.barType ~= "duration" then
+    if barCfg.barType == "charge" then
+        local chargeColorRow = AceGUI:Create("SimpleGroup")
+        chargeColorRow:SetFullWidth(true)
+        chargeColorRow:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
+        styleGroup:AddChild(chargeColorRow)
+
+        local rechargeColorPicker = AceGUI:Create("ColorPicker")
+        rechargeColorPicker:SetLabel(L.mbRechargeColor or "Recharge Color")
+        rechargeColorPicker:SetHasAlpha(true)
+        rechargeColorPicker:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        local rc = barCfg.rechargeColor or barCfg.barColor or { 0.4, 0.75, 1.0, 1 }
+        rechargeColorPicker:SetColor(rc[1], rc[2], rc[3], rc[4])
+        local function OnRechargeColor(_, _, r, g, b, a)
+            barCfg.rechargeColor = { r, g, b, a }
+            MB:RebuildAllBars()
+        end
+        rechargeColorPicker:SetCallback("OnValueChanged", OnRechargeColor)
+        rechargeColorPicker:SetCallback("OnValueConfirmed", OnRechargeColor)
+        chargeColorRow:AddChild(rechargeColorPicker)
+
+        local fullChargeColorPicker = AceGUI:Create("ColorPicker")
+        fullChargeColorPicker:SetLabel(L.mbFullChargeColor or "Full Charge Color")
+        fullChargeColorPicker:SetHasAlpha(true)
+        fullChargeColorPicker:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        local fcc = barCfg.fullChargeColor or barCfg.barColor or { 0.4, 0.75, 1.0, 1 }
+        fullChargeColorPicker:SetColor(fcc[1], fcc[2], fcc[3], fcc[4])
+        local function OnFullChargeColor(_, _, r, g, b, a)
+            barCfg.fullChargeColor = { r, g, b, a }
+            MB:RebuildAllBars()
+        end
+        fullChargeColorPicker:SetCallback("OnValueChanged", OnFullChargeColor)
+        fullChargeColorPicker:SetCallback("OnValueConfirmed", OnFullChargeColor)
+        chargeColorRow:AddChild(fullChargeColorPicker)
+    end
+
+    if barCfg.barType == "stack" then
         local thresholdColorRow = AceGUI:Create("SimpleGroup")
         thresholdColorRow:SetFullWidth(true)
         thresholdColorRow:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
@@ -1090,21 +1125,14 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         thresholdColorPicker2:SetCallback("OnValueConfirmed", OnThresholdColor2)
         thresholdColorRow:AddChild(thresholdColorPicker2)
 
-        local maxVal
-        if barCfg.barType == "charge" then
-            maxVal = (barCfg.maxCharges > 0 and barCfg.maxCharges or 10)
-        elseif barCfg.barType == "duration" then
-            maxVal = (barCfg.maxDuration or 60)
-        else
-            maxVal = (barCfg.maxStacks or 30)
-        end
+        local maxVal = (barCfg.maxStacks or 30)
         local thresholdSlider = AceGUI:Create("Slider")
         thresholdSlider:SetLabel(L.mbColorThreshold)
-        thresholdSlider:SetSliderValues(0, maxVal, barCfg.barType == "duration" and 0.1 or 1)
+        thresholdSlider:SetSliderValues(0, maxVal, 1)
         thresholdSlider:SetValue(barCfg.colorThreshold or 0)
         thresholdSlider:SetFullWidth(true)
         thresholdSlider:SetCallback("OnValueChanged", function(_, _, val)
-            local newVal = barCfg.barType == "duration" and (math.floor(val * 10 + 0.5) / 10) or math.floor(val)
+            local newVal = math.floor(val)
             barCfg.colorThreshold = newVal
             MB:RebuildAllBars()
 
@@ -1119,12 +1147,12 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
         thresholdSlider2 = AceGUI:Create("Slider")
         thresholdSlider2:SetLabel(L.mbColorThreshold2)
-        thresholdSlider2:SetSliderValues(0, maxVal, barCfg.barType == "duration" and 0.1 or 1)
+        thresholdSlider2:SetSliderValues(0, maxVal, 1)
         thresholdSlider2:SetValue(barCfg.colorThreshold2 or 0)
         thresholdSlider2:SetFullWidth(true)
         thresholdSlider2:SetDisabled((barCfg.colorThreshold or 0) == 0)
         thresholdSlider2:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.colorThreshold2 = barCfg.barType == "duration" and (math.floor(val * 10 + 0.5) / 10) or math.floor(val)
+            barCfg.colorThreshold2 = math.floor(val)
             MB:RebuildAllBars()
         end)
         styleGroup:AddChild(thresholdSlider2)
@@ -1803,7 +1831,7 @@ local function ShowCatalog(rebuildTab)
         ClassifyCatalogEntry(skillEntries, entry, "charge")
     end
     for _, entry in ipairs(auras) do
-        ClassifyCatalogEntry(auraEntries, entry, "stack")
+        ClassifyCatalogEntry(auraEntries, entry, "duration")
     end
     for _, entry in ipairs(specialEntries) do
         ClassifyCatalogEntry(auraEntries, entry, entry.barType or "stack")
