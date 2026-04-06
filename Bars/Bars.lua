@@ -184,11 +184,12 @@ local function ConfigurePrimaryText(frame, cfg)
     local anchor = cfg.textAnchor or cfg.textAlign or "CENTER"
     local txOff = cfg.textOffsetX or 0
     local tyOff = cfg.textOffsetY or 0
+    local textColor = cfg.textColor or { 1, 1, 1, 1 }
 
     frame._text:SetFont(fontPath, cfg.fontSize or 12, cfg.outline or "OUTLINE")
     frame._text:ClearAllPoints()
     frame._text:SetPoint(ANCHOR_POINT[anchor] or anchor, frame._textHolder, ANCHOR_REL[anchor] or anchor, txOff, tyOff)
-    frame._text:SetTextColor(1, 1, 1, 1)
+    frame._text:SetTextColor(textColor[1] or 1, textColor[2] or 1, textColor[3] or 1, textColor[4] or 1)
     frame._text:SetJustifyH(AnchorToJustifyH(anchor))
 end
 
@@ -197,11 +198,12 @@ local function ConfigureCountText(frame, cfg)
     local anchor = cfg.countTextAnchor or "LEFT"
     local txOff = cfg.countTextOffsetX or 0
     local tyOff = cfg.countTextOffsetY or 0
+    local textColor = cfg.countTextColor or { 1, 1, 1, 1 }
 
     frame._countText:SetFont(fontPath, cfg.countFontSize or cfg.fontSize or 14, cfg.countOutline or cfg.outline or "OUTLINE")
     frame._countText:ClearAllPoints()
     frame._countText:SetPoint(ANCHOR_POINT[anchor] or anchor, frame._textHolder, ANCHOR_REL[anchor] or anchor, txOff, tyOff)
-    frame._countText:SetTextColor(1, 1, 1, 1)
+    frame._countText:SetTextColor(textColor[1] or 1, textColor[2] or 1, textColor[3] or 1, textColor[4] or 1)
     frame._countText:SetJustifyH(AnchorToJustifyH(anchor))
 end
 
@@ -946,6 +948,7 @@ function MB:ApplyStyle(barFrame)
             barFrame._nameText = barFrame._textHolder:CreateFontString(nil, "OVERLAY")
         end
         local fontPath = ResolveFontPath(cfg.nameFontName or cfg.fontName)
+        local nameTextColor = cfg.nameTextColor or { 1, 1, 1, 1 }
         barFrame._nameText:SetFont(fontPath, cfg.nameFontSize or 14, cfg.nameOutline or cfg.outline or "OUTLINE")
         
         local nAnchor = cfg.nameAnchor or "RIGHT"
@@ -955,7 +958,7 @@ function MB:ApplyStyle(barFrame)
         barFrame._nameText:ClearAllPoints()
         barFrame._nameText:SetPoint(ANCHOR_POINT[nAnchor] or nAnchor, barFrame._textHolder, ANCHOR_REL[nAnchor] or nAnchor, nX, nY)
         barFrame._nameText:SetJustifyH(AnchorToJustifyH(nAnchor))
-        barFrame._nameText:SetTextColor(1, 1, 1, 1)
+        barFrame._nameText:SetTextColor(nameTextColor[1] or 1, nameTextColor[2] or 1, nameTextColor[3] or 1, nameTextColor[4] or 1)
         barFrame._nameText:SetText(cfg.spellName or "")
         barFrame._nameText:Show()
     else

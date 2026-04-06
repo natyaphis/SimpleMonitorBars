@@ -58,6 +58,7 @@ function ns.GetMonitorBarDefaults(options)
         fontName = "",
         fontSize = 14,
         outline = "OUTLINE",
+        textColor = { 1.0, 1.0, 1.0, 1.0 },
         showCountText = false,
         countTextAnchor = "LEFT",
         countTextOffsetX = 0,
@@ -65,6 +66,7 @@ function ns.GetMonitorBarDefaults(options)
         countFontName = "",
         countFontSize = 14,
         countOutline = "OUTLINE",
+        countTextColor = { 1.0, 1.0, 1.0, 1.0 },
         barTexture = "Solid",
         colorThreshold = 0,
         thresholdColor = { 1.0, 1.0, 1.0, 1 },
@@ -82,6 +84,7 @@ function ns.GetMonitorBarDefaults(options)
         nameOutline = "OUTLINE",
         nameFontName = "",
         nameFontSize = 14,
+        nameTextColor = { 1.0, 1.0, 1.0, 1.0 },
         specs = DeepCopy(options.specs or {}),
     }
 end

@@ -1300,6 +1300,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     local nameFontDD
     local nFontSizeSlider = AceGUI:Create("Slider")
+    local nameColorPicker
     local fontItems, fontOrder = GetFontItems()
     if next(fontItems) then
         local nameFontRow = AddTwoColumnRow(styleGroup)
@@ -1322,12 +1323,29 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     nFontSizeSlider:SetSliderValues(6, 24, 1)
     nFontSizeSlider:SetValue(barCfg.nameFontSize or 14)
 
+    nameColorPicker = AceGUI:Create("ColorPicker")
+    nameColorPicker:SetLabel(L.mbNameTextColor or "技能文字颜色")
+    nameColorPicker:SetHasAlpha(true)
+    nameColorPicker:SetFullWidth(true)
+    do
+        local color = barCfg.nameTextColor or { 1, 1, 1, 1 }
+        nameColorPicker:SetColor(color[1], color[2], color[3], color[4])
+    end
+    local function OnNameColor(_, _, r, g, b, a)
+        barCfg.nameTextColor = { r, g, b, a }
+        Refresh()
+    end
+    nameColorPicker:SetCallback("OnValueChanged", OnNameColor)
+    nameColorPicker:SetCallback("OnValueConfirmed", OnNameColor)
+    styleGroup:AddChild(nameColorPicker)
+
     local function SetSkillNameControlsDisabled(disabled)
         nameOutlineDD:SetDisabled(disabled)
         nAnchorDD:SetDisabled(disabled)
         nTxSlider:SetDisabled(disabled)
         nTySlider:SetDisabled(disabled)
         nFontSizeSlider:SetDisabled(disabled)
+        nameColorPicker:SetDisabled(disabled)
         if nameFontDD then
             nameFontDD:SetDisabled(disabled)
         end
@@ -1441,6 +1459,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
         local countFontDD
         local countFontSizeSlider
+        local countColorPicker
         if next(fontItems) then
             local countFontRow = AddTwoColumnRow(styleGroup)
 
@@ -1478,11 +1497,28 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             styleGroup:AddChild(countFontSizeSlider)
         end
 
+        countColorPicker = AceGUI:Create("ColorPicker")
+        countColorPicker:SetLabel(L.mbCountTextColor or "层数文字颜色")
+        countColorPicker:SetHasAlpha(true)
+        countColorPicker:SetFullWidth(true)
+        do
+            local color = barCfg.countTextColor or { 1, 1, 1, 1 }
+            countColorPicker:SetColor(color[1], color[2], color[3], color[4])
+        end
+        local function OnCountColor(_, _, r, g, b, a)
+            barCfg.countTextColor = { r, g, b, a }
+            Refresh()
+        end
+        countColorPicker:SetCallback("OnValueChanged", OnCountColor)
+        countColorPicker:SetCallback("OnValueConfirmed", OnCountColor)
+        styleGroup:AddChild(countColorPicker)
+
         SetCountTextControlsDisabled = function(disabled)
             countOutlineDD:SetDisabled(disabled)
             countAnchorDD:SetDisabled(disabled)
             countXSlider:SetDisabled(disabled)
             countYSlider:SetDisabled(disabled)
+            countColorPicker:SetDisabled(disabled)
             if countFontDD then
                 countFontDD:SetDisabled(disabled)
             end
@@ -1566,6 +1602,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
         local fontDD
         local fontSizeSlider
+        local textColorPicker
         if next(fontItems) then
             local fontRow = AddTwoColumnRow(styleGroup)
 
@@ -1603,11 +1640,28 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             styleGroup:AddChild(fontSizeSlider)
         end
 
+        textColorPicker = AceGUI:Create("ColorPicker")
+        textColorPicker:SetLabel(L.mbTimeTextColor or "时间文字颜色")
+        textColorPicker:SetHasAlpha(true)
+        textColorPicker:SetFullWidth(true)
+        do
+            local color = barCfg.textColor or { 1, 1, 1, 1 }
+            textColorPicker:SetColor(color[1], color[2], color[3], color[4])
+        end
+        local function OnTextColor(_, _, r, g, b, a)
+            barCfg.textColor = { r, g, b, a }
+            Refresh()
+        end
+        textColorPicker:SetCallback("OnValueChanged", OnTextColor)
+        textColorPicker:SetCallback("OnValueConfirmed", OnTextColor)
+        styleGroup:AddChild(textColorPicker)
+
         SetTextControlsDisabled = function(disabled)
             outlineDD:SetDisabled(disabled)
             anchorDD:SetDisabled(disabled)
             txSlider:SetDisabled(disabled)
             tySlider:SetDisabled(disabled)
+            textColorPicker:SetDisabled(disabled)
             if fontDD then
                 fontDD:SetDisabled(disabled)
             end

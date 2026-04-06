@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.6.2
+
+- Adjusted monitor bar runtime behavior and rendering logic.
+- Refined monitor settings and configuration handling.
+- Updated internal defaults and saved-data migration handling.
+
 ## 1.6.1
 
 - Adjusted monitor bar runtime behavior.
