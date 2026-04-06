@@ -222,6 +222,9 @@ end
 local function ExtractAuraCount(auraData)
     if type(auraData) ~= "table" then return nil end
     local count = auraData.applications or auraData.stacks or auraData.charges or auraData.count
+    if issecretvalue and issecretvalue(count) then
+        return count
+    end
     if type(count) == "number" and count > 0 then
         return count
     end
@@ -1974,6 +1977,11 @@ UpdateDurationBar = function(barFrame)
     local durationReady = false
 
     if auraActive and auraInstanceID and unit then
+        if not auraData then
+            auraData = GetAuraDataByInstanceID(auraInstanceID, unit, primaryUnit)
+        end
+        local auraCount = ExtractAuraCount(auraData)
+        local auraCountIsSecret = issecretvalue and issecretvalue(auraCount)
 
         local timerOK = pcall(function()
             local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
@@ -1998,7 +2006,13 @@ UpdateDurationBar = function(barFrame)
                         barFrame._text:SetText(remaining)
                     end
                 end
-                ClearCountText(barFrame)
+                if auraCountIsSecret then
+                    SetCountText(barFrame, auraCount)
+                elseif type(auraCount) == "number" then
+                    SetCountText(barFrame, tostring(auraCount))
+                else
+                    ClearCountText(barFrame)
+                end
             else
                 if cfg.showText ~= false and barFrame._text then
                     barFrame._text:SetText("")
