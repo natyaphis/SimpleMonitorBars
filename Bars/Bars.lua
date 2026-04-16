@@ -2200,9 +2200,9 @@ UpdateTrinketBar = function(barFrame)
 
     HideChargeVisuals(barFrame)
 
-    local spellID = ResolveTrinketAuraSpellID(cfg)
     local itemID = tonumber(cfg.itemID) or 0
-    if itemID > 0 then
+    if itemID > 0 and (barFrame._lastTrinketItemID ~= itemID or not cfg.itemName or cfg.itemName == "" or not (barFrame._icon and barFrame._icon:GetTexture())) then
+        barFrame._lastTrinketItemID = itemID
         C_Item.RequestLoadItemDataByID(itemID)
         local itemName, _, _, _, _, _, _, _, _, itemIcon = C_Item.GetItemInfo(itemID)
         if itemName and itemName ~= "" then
@@ -2225,71 +2225,25 @@ UpdateTrinketBar = function(barFrame)
 
     local seg = segs[1]
     local durationReady = false
-    local auraActive = false
-    local auraData = nil
-    local auraInstanceID = nil
-    local unit = cfg.unit or "player"
-
-    if spellID and spellID > 0 then
-        auraData = FindHelpfulAuraBySpellID(unit, spellID)
-        if auraData then
-            auraActive = true
-            auraInstanceID = auraData.auraInstanceID
-            barFrame._trackedAuraInstanceID = auraInstanceID
-            barFrame._trackedUnit = unit
-        elseif HasAuraInstanceID(barFrame._trackedAuraInstanceID) then
-            auraData, unit = GetAuraDataByInstanceID(barFrame._trackedAuraInstanceID, barFrame._trackedUnit, cfg.unit or "player")
-            if auraData then
-                auraActive = true
-                auraInstanceID = barFrame._trackedAuraInstanceID
-                barFrame._trackedUnit = unit
-            end
+    local now = GetTime()
+    local startTime = barFrame._fallbackStartTime
+    local endTime = barFrame._fallbackEndTime
+    local totalDuration = barFrame._fallbackDuration
+    if startTime and endTime and totalDuration and endTime > now and totalDuration > 0 then
+        local remaining = endTime - now
+        seg:SetMinMaxValues(0, 1)
+        seg:SetValue(math.max(0, math.min(1, remaining / totalDuration)))
+        local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
+        seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
+        if cfg.showText ~= false and barFrame._text then
+            barFrame._text:SetText(FormatRemainingTimeText(remaining))
         end
-    end
-
-    if auraActive and auraInstanceID and unit then
-        local timerOK = pcall(function()
-            local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
-            if durObj and ApplyDurationTimer(seg, durObj, cfg) then
-                durationReady = true
-                barFrame._fallbackStartTime = nil
-                barFrame._fallbackEndTime = nil
-                barFrame._fallbackDuration = nil
-                local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
-                seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
-                if cfg.showText ~= false and barFrame._text then
-                    barFrame._text:SetText(FormatRemainingTimeText(durObj:GetRemainingDuration()))
-                end
-                ClearCountText(barFrame)
-            end
-        end)
-
-        if not timerOK then
-            durationReady = false
-        end
-    end
-
-    if not durationReady then
-        local now = GetTime()
-        local startTime = barFrame._fallbackStartTime
-        local endTime = barFrame._fallbackEndTime
-        local totalDuration = barFrame._fallbackDuration
-        if startTime and endTime and totalDuration and endTime > now and totalDuration > 0 then
-            local remaining = endTime - now
-            seg:SetMinMaxValues(0, 1)
-            seg:SetValue(math.max(0, math.min(1, remaining / totalDuration)))
-            local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
-            seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
-            if cfg.showText ~= false and barFrame._text then
-                barFrame._text:SetText(FormatRemainingTimeText(remaining))
-            end
-            ClearCountText(barFrame)
-            durationReady = true
-        else
-            barFrame._fallbackStartTime = nil
-            barFrame._fallbackEndTime = nil
-            barFrame._fallbackDuration = nil
-        end
+        ClearCountText(barFrame)
+        durationReady = true
+    else
+        barFrame._fallbackStartTime = nil
+        barFrame._fallbackEndTime = nil
+        barFrame._fallbackDuration = nil
     end
 
     if not durationReady then
@@ -2325,8 +2279,6 @@ local function UpdateAllBars()
                 UpdateChargeBar(f)
             elseif barCfg.barType == "duration" then
                 UpdateDurationBar(f)
-            elseif barCfg.barType == "trinket" then
-                UpdateTrinketBar(f)
             end
         end
     end
@@ -2361,12 +2313,26 @@ local function AnimateStackBars(dt)
     end
 end
 
+local function AnimateTrinketBars()
+    for _, barFrame in pairs(activeFrames) do
+        local cfg = barFrame._cfg
+        if cfg and cfg.barType == "trinket" then
+            local endTime = barFrame._fallbackEndTime
+            local duration = barFrame._fallbackDuration
+            if (endTime and duration and duration > 0) or barFrame._isActive then
+                UpdateTrinketBar(barFrame)
+            end
+        end
+    end
+end
+
 local updateFrame = CreateFrame("Frame")
 updateFrame:SetScript("OnUpdate", function(_, dt)
     frameTick = frameTick + 1
 
 
     AnimateStackBars(dt)
+    AnimateTrinketBars()
 
     elapsed = elapsed + dt
     if elapsed < UPDATE_INTERVAL then return end
@@ -2573,10 +2539,11 @@ end
 function MB:OnEquipmentChanged()
     for _, f in pairs(activeFrames) do
         if f._cfg and f._cfg.barType == "trinket" then
+            f._lastTrinketItemID = nil
             if f._cfg.itemID and f._cfg.itemID > 0 then
                 C_Item.RequestLoadItemDataByID(f._cfg.itemID)
             end
-            f._needsDurationRefresh = true
+            UpdateTrinketBar(f)
         end
     end
 end
@@ -2599,12 +2566,12 @@ function MB:OnAuraUpdate(unit, updateInfo)
                 local cfgUnit = f._cfg.unit or "player"
                 local matched = (cfgUnit == unit)
                 if matched then
-                    if f._cfg.barType == "duration" or f._cfg.barType == "trinket" then
+                    if f._cfg.barType == "duration" then
                         QueueDurationRefresh(f)
                     elseif f._cfg.barType == "stack" then
                         RefreshStackBarForAuraUpdate(f)
                     end
-            elseif (f._cfg.barType == "duration" or f._cfg.barType == "trinket") and unit == "target" and cfgUnit == "player" then
+            elseif f._cfg.barType == "duration" and unit == "target" and cfgUnit == "player" then
                 QueueDurationRefresh(f)
             elseif f._cfg.barType == "stack" and unit == "target" and cfgUnit == "player" then
 
@@ -2612,7 +2579,7 @@ function MB:OnAuraUpdate(unit, updateInfo)
             elseif f._cfg.barType == "stack" and unit == "player" and cfgUnit == "target" then
 
                 RefreshStackBarForAuraUpdate(f)
-            elseif (f._cfg.barType == "duration" or f._cfg.barType == "trinket") and unit == "player" and cfgUnit == "target" then
+            elseif f._cfg.barType == "duration" and unit == "player" and cfgUnit == "target" then
                 QueueDurationRefresh(f)
             end
         end
