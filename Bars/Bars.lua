@@ -41,6 +41,83 @@ local function ResolveBarTexturePath(textureName)
     return BAR_TEXTURE
 end
 
+local function ParseDurationFromText(text)
+    if type(text) ~= "string" or text == "" then
+        return nil
+    end
+
+    local patterns = {
+        "(%d+)%s*秒",
+        "(%d+)%s*sec",
+        "(%d+)%s*second",
+        "持续%s*(%d+)",
+        "for%s*(%d+)",
+    }
+
+    for _, pattern in ipairs(patterns) do
+        local duration = text:match(pattern)
+        if duration then
+            return tonumber(duration)
+        end
+    end
+
+    return nil
+end
+
+local function GetItemSpellAndDuration(itemID)
+    if not itemID or itemID <= 0 then
+        return nil, nil
+    end
+
+    local itemSpellName, itemSpellID = C_Item.GetItemSpell(itemID)
+    if itemSpellName and not itemSpellID and C_Spell and C_Spell.GetSpellInfo then
+        local info = C_Spell.GetSpellInfo(itemSpellName)
+        itemSpellID = info and info.spellID
+    end
+
+    if itemSpellID and itemSpellID > 0 and C_Spell and C_Spell.GetSpellDescription then
+        local description = C_Spell.GetSpellDescription(itemSpellID)
+        local duration = ParseDurationFromText(description)
+        if duration then
+            return itemSpellID, duration
+        end
+    end
+
+    if itemSpellID and itemSpellID > 0 and C_TooltipInfo and C_TooltipInfo.GetSpellByID then
+        local tooltipInfo = C_TooltipInfo.GetSpellByID(itemSpellID)
+        if tooltipInfo and tooltipInfo.lines then
+            for _, line in ipairs(tooltipInfo.lines) do
+                local duration = ParseDurationFromText(line.leftText)
+                if duration then
+                    return itemSpellID, duration
+                end
+            end
+        end
+    end
+
+    local tooltip = MB._trinketScanTooltip
+    if not tooltip then
+        tooltip = CreateFrame("GameTooltip", "SimpleMonitorBarsTrinketScanTooltip", UIParent, "GameTooltipTemplate")
+        tooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        MB._trinketScanTooltip = tooltip
+    end
+
+    tooltip:ClearLines()
+    tooltip:SetItemByID(itemID)
+    for i = 1, tooltip:NumLines() do
+        local line = _G["SimpleMonitorBarsTrinketScanTooltipTextLeft" .. i]
+        local text = line and line:GetText()
+        local duration = ParseDurationFromText(text)
+        if duration then
+            return itemSpellID, duration
+        end
+    end
+
+    return itemSpellID, nil
+end
+
+MB.GetItemSpellAndDuration = GetItemSpellAndDuration
+
 local function IsVerticalBar(cfg)
     return cfg and cfg.verticalBar == true
 end
@@ -353,6 +430,7 @@ local viewerSignalRegistry = {}
 local watcherIDsByFrame = {}
 local UpdateStackBar
 local UpdateDurationBar
+local UpdateTrinketBar
 local pendingDurationRefresh = {}
 local durationFlushFrame = CreateFrame("Frame")
 
@@ -374,9 +452,13 @@ durationFlushFrame:SetScript("OnUpdate", function(self)
     for barID in pairs(pendingDurationRefresh) do
         pendingDurationRefresh[barID] = nil
         local barFrame = activeFrames[barID]
-        if barFrame and barFrame._cfg and barFrame._cfg.barType == "duration" then
+        if barFrame and barFrame._cfg and (barFrame._cfg.barType == "duration" or barFrame._cfg.barType == "trinket") then
             barFrame._needsDurationRefresh = true
-            UpdateDurationBar(barFrame)
+            if barFrame._cfg.barType == "trinket" then
+                UpdateTrinketBar(barFrame)
+            else
+                UpdateDurationBar(barFrame)
+            end
         end
     end
 end)
@@ -389,7 +471,7 @@ local function OnCDMFrameChanged(frame)
         if f and f._cfg then
             if f._cfg.barType == "stack" then
                 UpdateStackBar(f)
-            elseif f._cfg.barType == "duration" then
+            elseif f._cfg.barType == "duration" or f._cfg.barType == "trinket" then
                 QueueDurationRefresh(f)
             end
         end
@@ -959,7 +1041,11 @@ function MB:ApplyStyle(barFrame)
         barFrame._nameText:SetPoint(ANCHOR_POINT[nAnchor] or nAnchor, barFrame._textHolder, ANCHOR_REL[nAnchor] or nAnchor, nX, nY)
         barFrame._nameText:SetJustifyH(AnchorToJustifyH(nAnchor))
         barFrame._nameText:SetTextColor(nameTextColor[1] or 1, nameTextColor[2] or 1, nameTextColor[3] or 1, nameTextColor[4] or 1)
-        barFrame._nameText:SetText(cfg.spellName or "")
+        local displayName = cfg.spellName or ""
+        if cfg.barType == "trinket" and cfg.itemName and cfg.itemName ~= "" then
+            displayName = cfg.itemName
+        end
+        barFrame._nameText:SetText(displayName)
         barFrame._nameText:Show()
     else
         if barFrame._nameText then barFrame._nameText:Hide() end
@@ -985,7 +1071,7 @@ function MB:ApplyStyle(barFrame)
     local count
     if cfg.barType == "charge" then
         count = 0
-    elseif cfg.barType == "duration" then
+    elseif cfg.barType == "duration" or cfg.barType == "trinket" then
         count = 1
     else
         count = cfg.maxStacks
@@ -1032,7 +1118,13 @@ function MB:ApplyStyle(barFrame)
         end
     end
 
-    if cfg.spellID and cfg.spellID > 0 then
+    if cfg.barType == "trinket" and cfg.itemID and cfg.itemID > 0 then
+        C_Item.RequestLoadItemDataByID(cfg.itemID)
+        local _, _, _, _, _, _, _, _, _, tex = C_Item.GetItemInfo(cfg.itemID)
+        if tex then
+            barFrame._icon:SetTexture(tex)
+        end
+    elseif cfg.spellID and cfg.spellID > 0 then
         local tex = C_Spell.GetSpellTexture(cfg.spellID)
         if tex then barFrame._icon:SetTexture(tex) end
     end
@@ -1159,6 +1251,57 @@ local function ResolveRuntimeSpellID(spellID)
     end
 
     return spellID
+end
+
+local function ResolveTrinketAuraSpellID(cfg)
+    if not cfg then
+        return nil
+    end
+
+    local spellID = ResolveRuntimeSpellID(cfg.spellID or 0) or cfg.spellID
+    if spellID and spellID > 0 then
+        return spellID
+    end
+
+    if cfg.itemID and cfg.itemID > 0 then
+        local itemSpellID = select(1, GetItemSpellAndDuration(cfg.itemID))
+        if itemSpellID and itemSpellID > 0 then
+            return itemSpellID
+        end
+    end
+
+    return nil
+end
+
+local function ResolveTrinketFallbackDuration(cfg)
+    if not cfg then
+        return 0
+    end
+
+    local fallbackDuration = tonumber(cfg.fallbackDuration) or 0
+    if fallbackDuration > 0 then
+        return fallbackDuration
+    end
+
+    if cfg.itemID and cfg.itemID > 0 then
+        local _, itemDuration = GetItemSpellAndDuration(cfg.itemID)
+        if itemDuration and itemDuration > 0 then
+            return itemDuration
+        end
+    end
+
+    return 0
+end
+
+local function ResolveTrinketUseSpellID(cfg)
+    if not cfg or not cfg.itemID or cfg.itemID <= 0 then
+        return nil
+    end
+    local itemSpellID = select(1, GetItemSpellAndDuration(cfg.itemID))
+    if itemSpellID and itemSpellID > 0 then
+        return itemSpellID
+    end
+    return nil
 end
 
 local function GetStackCountFromAuraOrFrame(auraData, cdmFrame)
@@ -2051,6 +2194,118 @@ UpdateDurationBar = function(barFrame)
     UpdateBarActiveState(barFrame, durationReady)
 end
 
+UpdateTrinketBar = function(barFrame)
+    local cfg = barFrame._cfg
+    if not cfg or cfg.barType ~= "trinket" then return end
+
+    HideChargeVisuals(barFrame)
+
+    local spellID = ResolveTrinketAuraSpellID(cfg)
+    local itemID = tonumber(cfg.itemID) or 0
+    if itemID > 0 then
+        C_Item.RequestLoadItemDataByID(itemID)
+        local itemName, _, _, _, _, _, _, _, _, itemIcon = C_Item.GetItemInfo(itemID)
+        if itemName and itemName ~= "" then
+            cfg.itemName = itemName
+            if (not cfg.spellName or cfg.spellName == "") and barFrame._nameText and cfg.showSpellName then
+                barFrame._nameText:SetText(itemName)
+            end
+        end
+        if itemIcon then
+            barFrame._icon:SetTexture(itemIcon)
+        end
+    end
+
+    local segs = barFrame._segments
+    if not segs or #segs ~= 1 then
+        CreateSegments(barFrame, 1, cfg)
+        segs = barFrame._segments
+    end
+    if not segs or #segs < 1 then return end
+
+    local seg = segs[1]
+    local durationReady = false
+    local auraActive = false
+    local auraData = nil
+    local auraInstanceID = nil
+    local unit = cfg.unit or "player"
+
+    if spellID and spellID > 0 then
+        auraData = FindHelpfulAuraBySpellID(unit, spellID)
+        if auraData then
+            auraActive = true
+            auraInstanceID = auraData.auraInstanceID
+            barFrame._trackedAuraInstanceID = auraInstanceID
+            barFrame._trackedUnit = unit
+        elseif HasAuraInstanceID(barFrame._trackedAuraInstanceID) then
+            auraData, unit = GetAuraDataByInstanceID(barFrame._trackedAuraInstanceID, barFrame._trackedUnit, cfg.unit or "player")
+            if auraData then
+                auraActive = true
+                auraInstanceID = barFrame._trackedAuraInstanceID
+                barFrame._trackedUnit = unit
+            end
+        end
+    end
+
+    if auraActive and auraInstanceID and unit then
+        local timerOK = pcall(function()
+            local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
+            if durObj and ApplyDurationTimer(seg, durObj, cfg) then
+                durationReady = true
+                barFrame._fallbackStartTime = nil
+                barFrame._fallbackEndTime = nil
+                barFrame._fallbackDuration = nil
+                local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
+                seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
+                if cfg.showText ~= false and barFrame._text then
+                    barFrame._text:SetText(FormatRemainingTimeText(durObj:GetRemainingDuration()))
+                end
+                ClearCountText(barFrame)
+            end
+        end)
+
+        if not timerOK then
+            durationReady = false
+        end
+    end
+
+    if not durationReady then
+        local now = GetTime()
+        local startTime = barFrame._fallbackStartTime
+        local endTime = barFrame._fallbackEndTime
+        local totalDuration = barFrame._fallbackDuration
+        if startTime and endTime and totalDuration and endTime > now and totalDuration > 0 then
+            local remaining = endTime - now
+            seg:SetMinMaxValues(0, 1)
+            seg:SetValue(math.max(0, math.min(1, remaining / totalDuration)))
+            local c = cfg.barColor or { 0.4, 0.75, 1.0, 1 }
+            seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
+            if cfg.showText ~= false and barFrame._text then
+                barFrame._text:SetText(FormatRemainingTimeText(remaining))
+            end
+            ClearCountText(barFrame)
+            durationReady = true
+        else
+            barFrame._fallbackStartTime = nil
+            barFrame._fallbackEndTime = nil
+            barFrame._fallbackDuration = nil
+        end
+    end
+
+    if not durationReady then
+        barFrame._trackedAuraInstanceID = nil
+        barFrame._trackedUnit = nil
+        seg:SetMinMaxValues(0, 1)
+        seg:SetValue(0)
+        if cfg.showText ~= false and barFrame._text then
+            barFrame._text:SetText("")
+        end
+        ClearCountText(barFrame)
+    end
+
+    UpdateBarActiveState(barFrame, durationReady)
+end
+
 
 
 
@@ -2062,13 +2317,16 @@ local function UpdateAllBars()
 
     for _, barCfg in ipairs(bars) do
         local f = activeFrames[barCfg.id]
-        if f and barCfg.enabled and barCfg.spellID > 0 then
+        local hasTrigger = (barCfg.spellID and barCfg.spellID > 0) or (barCfg.barType == "trinket" and barCfg.itemID and barCfg.itemID > 0)
+        if f and barCfg.enabled and hasTrigger then
             if barCfg.barType == "stack" then
                 UpdateStackBar(f)
             elseif barCfg.barType == "charge" then
                 UpdateChargeBar(f)
             elseif barCfg.barType == "duration" then
                 UpdateDurationBar(f)
+            elseif barCfg.barType == "trinket" then
+                UpdateTrinketBar(f)
             end
         end
     end
@@ -2182,7 +2440,7 @@ function MB:InitAllBars()
 
     for _, barCfg in ipairs(bars) do
         if barCfg.enabled
-            and barCfg.spellID > 0
+            and ((barCfg.spellID and barCfg.spellID > 0) or (barCfg.barType == "trinket" and barCfg.itemID and barCfg.itemID > 0))
             and IsClassMatchedForCurrentPlayer(barCfg.class)
             and IsBarVisibleForSpec(barCfg) then
             local f = self:CreateBarFrame(barCfg)
@@ -2191,7 +2449,7 @@ function MB:InitAllBars()
             local count
             if barCfg.barType == "charge" then
                 count = (barCfg.maxCharges > 0 and barCfg.maxCharges or 1)
-            elseif barCfg.barType == "duration" then
+            elseif barCfg.barType == "duration" or barCfg.barType == "trinket" then
                 count = 1
             else
                 count = barCfg.maxStacks
@@ -2290,6 +2548,39 @@ function MB:OnCooldownUpdate()
     end
 end
 
+function MB:OnUnitSpellcastSucceeded(unit, spellID)
+    if unit ~= "player" or not spellID or spellID <= 0 then
+        return
+    end
+
+    local now = GetTime()
+    for _, f in pairs(activeFrames) do
+        local cfg = f._cfg
+        if cfg and cfg.barType == "trinket" and cfg.itemID and cfg.itemID > 0 then
+            local useSpellID = ResolveTrinketUseSpellID(cfg)
+            if useSpellID and useSpellID == spellID then
+                local duration = ResolveTrinketFallbackDuration(cfg)
+                if duration and duration > 0 then
+                    f._fallbackStartTime = now
+                    f._fallbackEndTime = now + duration
+                    f._fallbackDuration = duration
+                end
+            end
+        end
+    end
+end
+
+function MB:OnEquipmentChanged()
+    for _, f in pairs(activeFrames) do
+        if f._cfg and f._cfg.barType == "trinket" then
+            if f._cfg.itemID and f._cfg.itemID > 0 then
+                C_Item.RequestLoadItemDataByID(f._cfg.itemID)
+            end
+            f._needsDurationRefresh = true
+        end
+    end
+end
+
 function MB:OnAuraUpdate(unit, updateInfo)
     if unit ~= "player" and unit ~= "target" then
         return
@@ -2304,16 +2595,16 @@ function MB:OnAuraUpdate(unit, updateInfo)
     end
 
     for _, f in pairs(activeFrames) do
-        if f._cfg then
-            local cfgUnit = f._cfg.unit or "player"
-            local matched = (cfgUnit == unit)
-            if matched then
-                if f._cfg.barType == "duration" then
-                    QueueDurationRefresh(f)
-                elseif f._cfg.barType == "stack" then
-                    RefreshStackBarForAuraUpdate(f)
-                end
-            elseif f._cfg.barType == "duration" and unit == "target" and cfgUnit == "player" then
+            if f._cfg then
+                local cfgUnit = f._cfg.unit or "player"
+                local matched = (cfgUnit == unit)
+                if matched then
+                    if f._cfg.barType == "duration" or f._cfg.barType == "trinket" then
+                        QueueDurationRefresh(f)
+                    elseif f._cfg.barType == "stack" then
+                        RefreshStackBarForAuraUpdate(f)
+                    end
+            elseif (f._cfg.barType == "duration" or f._cfg.barType == "trinket") and unit == "target" and cfgUnit == "player" then
                 QueueDurationRefresh(f)
             elseif f._cfg.barType == "stack" and unit == "target" and cfgUnit == "player" then
 
@@ -2321,7 +2612,7 @@ function MB:OnAuraUpdate(unit, updateInfo)
             elseif f._cfg.barType == "stack" and unit == "player" and cfgUnit == "target" then
 
                 RefreshStackBarForAuraUpdate(f)
-            elseif f._cfg.barType == "duration" and unit == "player" and cfgUnit == "target" then
+            elseif (f._cfg.barType == "duration" or f._cfg.barType == "trinket") and unit == "player" and cfgUnit == "target" then
                 QueueDurationRefresh(f)
             end
         end

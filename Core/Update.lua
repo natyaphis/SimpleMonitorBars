@@ -48,6 +48,9 @@ local function MigrateMonitorBars(profileData)
             bar.countTextAnchor = NormalizeSimpleTextAnchor(bar.countTextAnchor, "LEFT")
             bar.textAnchor = NormalizeSimpleTextAnchor(bar.textAnchor or bar.textAlign, "CENTER")
             bar.textAlign = bar.textAnchor
+            if bar.barType == "trinket" and bar.unit == nil then
+                bar.unit = "player"
+            end
             bar.barShape = nil
             bar.ringThickness = nil
             if type(bar.id) ~= "number" then

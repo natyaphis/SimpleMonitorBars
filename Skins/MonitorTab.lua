@@ -48,6 +48,7 @@ local BAR_TYPE_ITEMS = {
     ["stack"]    = L.mbTypeStack,
     ["charge"]   = L.mbTypeCharge,
     ["duration"] = L.mbTypeDuration,
+    ["trinket"]  = L.mbTypeTrinket,
 }
 
 local UNIT_ITEMS = {
@@ -102,9 +103,14 @@ local function GetSelectedBarDisplayName()
         return nil
     end
 
-    local spellName = barCfg.spellName
+    local spellName = (barCfg.barType == "trinket" and barCfg.itemName) or barCfg.spellName
     if (not spellName or spellName == "") and type(barCfg.spellID) == "number" and barCfg.spellID > 0 then
         spellName = C_Spell.GetSpellName(barCfg.spellID)
+    end
+    if (not spellName or spellName == "") and barCfg.barType == "trinket" and type(barCfg.itemID) == "number" and barCfg.itemID > 0 then
+        C_Item.RequestLoadItemDataByID(barCfg.itemID)
+        spellName = C_Item.GetItemInfo(barCfg.itemID)
+        barCfg.itemName = spellName or barCfg.itemName
     end
 
     if spellName and spellName ~= "" then
@@ -265,7 +271,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         barType = barType,
         spellID = spellID,
         spellName = spellName,
-        unit = unit,
+        unit = (barType == "trinket") and "player" or unit,
         maxCharges = 0,
         isChargeSpell = (barType == "charge"),
         showCondition = "always",
@@ -308,12 +314,27 @@ local function GetBarDropdownList(cfg)
     local items, order, idToIndex = {}, {}, {}
     for i, bar in ipairs(cfg.bars) do
         if IsClassMatchedForCurrentPlayer(bar.class) then
-            local name = bar.spellName and bar.spellName ~= "" and bar.spellName or L.mbNoSpell
+            local name = L.mbNoSpell
+            if bar.barType == "trinket" then
+                name = (bar.itemName and bar.itemName ~= "" and bar.itemName) or name
+                if name == L.mbNoSpell and bar.itemID and bar.itemID > 0 then
+                    C_Item.RequestLoadItemDataByID(bar.itemID)
+                    local itemName = C_Item.GetItemInfo(bar.itemID)
+                    if itemName and itemName ~= "" then
+                        name = itemName
+                        bar.itemName = itemName
+                    end
+                end
+            else
+                name = bar.spellName and bar.spellName ~= "" and bar.spellName or name
+            end
             local typeTag
             if bar.barType == "charge" then
                 typeTag = L.mbTypeCharge
             elseif bar.barType == "duration" then
                 typeTag = L.mbTypeDuration or "Duration"
+            elseif bar.barType == "trinket" then
+                typeTag = L.mbTypeTrinket or "Trinket"
             else
                 typeTag = L.mbTypeStack
             end
@@ -624,7 +645,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             barCfg.maskAndBorderStyle = "1"
         end
     end
-    if barCfg.barType == "duration" and (barCfg.borderStyle == nil or barCfg.borderStyle == "segment") then
+    if (barCfg.barType == "duration" or barCfg.barType == "trinket") and (barCfg.borderStyle == nil or barCfg.borderStyle == "segment") then
         barCfg.borderStyle = "whole"
     end
 
@@ -723,12 +744,66 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     AddMonitorHeading(container, L.mbTriggerSection or "触发设置")
 
+    if barCfg.barType == "trinket" then
+        local itemRow = AddTwoColumnRow(container)
+        itemRow.noAutoHeight = true
+        itemRow:SetHeight(LABELED_ROW_HEIGHT)
+
+        local itemBox = AceGUI:Create("EditBox")
+        itemBox:SetLabel(L.mbTrinketItemID or "Trinket Item ID")
+        itemBox:SetText(barCfg.itemID > 0 and tostring(barCfg.itemID) or "")
+        itemBox:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        itemBox.frame:SetHeight(LABELED_ROW_HEIGHT)
+        itemBox.alignoffset = 30
+        itemBox:SetCallback("OnEnterPressed", function(_, _, val)
+            local id = tonumber(val)
+            if id and id > 0 then
+                barCfg.itemID = id
+                C_Item.RequestLoadItemDataByID(id)
+                local itemName = C_Item.GetItemInfo(id)
+                if itemName and itemName ~= "" then
+                    barCfg.itemName = itemName
+                end
+                local itemSpellID, duration = MB.GetItemSpellAndDuration and MB.GetItemSpellAndDuration(id)
+                if itemSpellID and itemSpellID > 0 and (tonumber(barCfg.spellID) or 0) <= 0 then
+                    barCfg.spellID = itemSpellID
+                    barCfg.spellName = C_Spell.GetSpellName(itemSpellID) or ""
+                end
+                if duration and duration > 0 and (tonumber(barCfg.fallbackDuration) or 0) <= 0 then
+                    barCfg.fallbackDuration = duration
+                end
+                MB:RebuildAllBars()
+                rebuildAll()
+            end
+        end)
+        itemRow:AddChild(itemBox)
+
+        local itemName = barCfg.itemName
+        if (not itemName or itemName == "") and barCfg.itemID > 0 then
+            C_Item.RequestLoadItemDataByID(barCfg.itemID)
+            itemName = C_Item.GetItemInfo(barCfg.itemID) or "?"
+            barCfg.itemName = itemName
+        end
+
+        local itemNameLabel = AceGUI:Create("Label")
+        itemNameLabel:SetText("|cff00ccff" .. (L.mbTrinketItemName or "Item") .. ": " .. (itemName or (L.mbNoSpell or "?")) .. "|r")
+        itemNameLabel:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        itemNameLabel:SetFontObject(GameFontHighlightSmall)
+        itemNameLabel.frame:SetHeight(LABELED_ROW_HEIGHT)
+        itemNameLabel.label:ClearAllPoints()
+        itemNameLabel.label:SetPoint("TOPLEFT", itemNameLabel.frame, "TOPLEFT", 0, -18)
+        itemNameLabel.label:SetPoint("TOPRIGHT", itemNameLabel.frame, "TOPRIGHT", 0, -18)
+        itemNameLabel.label:SetJustifyH("LEFT")
+        itemNameLabel.label:SetJustifyV("TOP")
+        itemRow:AddChild(itemNameLabel)
+    end
+
     local spellRow = AddTwoColumnRow(container)
     spellRow.noAutoHeight = true
     spellRow:SetHeight(LABELED_ROW_HEIGHT)
 
     local spellBox = AceGUI:Create("EditBox")
-    spellBox:SetLabel(L.mbSpellID)
+    spellBox:SetLabel((barCfg.barType == "trinket" and (L.mbTrinketAuraSpellID or "Buff Spell ID")) or L.mbSpellID)
     spellBox:SetText(barCfg.spellID > 0 and tostring(barCfg.spellID) or "")
     spellBox:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     spellBox.frame:SetHeight(LABELED_ROW_HEIGHT)
@@ -754,7 +829,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end
 
     local nameLabel = AceGUI:Create("Label")
-    nameLabel:SetText("|cff00ccff" .. L.mbSpellName .. ": " .. spellName .. "|r")
+    nameLabel:SetText("|cff00ccff" .. ((barCfg.barType == "trinket" and (L.mbTrinketAuraName or "Buff")) or L.mbSpellName) .. ": " .. spellName .. "|r")
     nameLabel:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     nameLabel:SetFontObject(GameFontHighlightSmall)
     nameLabel.frame:SetHeight(LABELED_ROW_HEIGHT)
@@ -771,7 +846,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     local typeDD = AceGUI:Create("Dropdown")
     typeDD:SetLabel(L.mbBarType)
-    typeDD:SetList(BAR_TYPE_ITEMS, { "stack", "charge", "duration" })
+    typeDD:SetList(BAR_TYPE_ITEMS, { "stack", "charge", "duration", "trinket" })
     typeDD:SetValue(barCfg.barType)
     typeDD:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
     typeDD:SetCallback("OnValueChanged", function(_, _, val)
@@ -810,7 +885,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         MB:RebuildAllBars()
     end)
 
-    if barCfg.barType == "stack" or barCfg.barType == "duration" then
+    if barCfg.barType == "stack" or barCfg.barType == "duration" or barCfg.barType == "trinket" then
         local unitCondRow = AddTwoColumnRow(container)
         unitCondRow.noAutoHeight = true
         unitCondRow:SetHeight(LABELED_ROW_HEIGHT)
@@ -1178,7 +1253,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     colorRow:AddChild(borderColorPicker)
 
 
-    if barCfg.barType ~= "duration" then
+    if barCfg.barType ~= "duration" and barCfg.barType ~= "trinket" then
         local borderRow = AceGUI:Create("SimpleGroup")
         borderRow:SetFullWidth(true)
         borderRow:SetLayout(MONITOR_BARS_FLOW_LAYOUT)
@@ -1223,7 +1298,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end
 
 
-    if barCfg.barType ~= "duration" then
+    if barCfg.barType ~= "duration" and barCfg.barType ~= "trinket" then
         local gapSlider = AceGUI:Create("Slider")
         gapSlider:SetLabel(L.mbSegmentGap)
         gapSlider:SetSliderValues(0, 10, 1)
@@ -1393,7 +1468,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     local fontItems, fontOrder = GetFontItems()
 
-    if barCfg.barType == "stack" or barCfg.barType == "charge" or barCfg.barType == "duration" then
+    if barCfg.barType == "stack" or barCfg.barType == "charge" or barCfg.barType == "duration" or barCfg.barType == "trinket" then
         AddMonitorHeading(styleGroup, L.mbCountTextHeading or "层数文字")
 
         local countTextCB = AceGUI:Create("CheckBox")
@@ -1530,7 +1605,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         SetCountTextControlsDisabled(barCfg.showCountText ~= true)
     end
 
-    if barCfg.barType == "charge" or barCfg.barType == "duration" then
+    if barCfg.barType == "charge" or barCfg.barType == "duration" or barCfg.barType == "trinket" then
         AddMonitorHeading(styleGroup, L.mbTimeTextHeading or "时间文字")
 
         local textCB = AceGUI:Create("CheckBox")
@@ -1671,6 +1746,19 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         end
 
         SetTextControlsDisabled(barCfg.showText == false)
+    end
+
+    if barCfg.barType == "trinket" then
+        local fallbackSlider = AceGUI:Create("Slider")
+        fallbackSlider:SetLabel(L.mbTrinketFallbackDuration or "Fallback Duration (sec)")
+        fallbackSlider:SetSliderValues(0, 120, 1)
+        fallbackSlider:SetValue(tonumber(barCfg.fallbackDuration) or 0)
+        fallbackSlider:SetFullWidth(true)
+        fallbackSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.fallbackDuration = math.floor(val)
+            MB:RebuildAllBars()
+        end)
+        container:AddChild(fallbackSlider)
     end
 
 end
@@ -1830,6 +1918,14 @@ local function ShowCatalog(rebuildTab)
             icon = TEMPLATE_ICON,
             unit = "player",
             barType = "duration",
+            monitored = false,
+        },
+        {
+            spellID = 0,
+            name = L.mbTemplateTrinket or "饰品条模版",
+            icon = TEMPLATE_ICON,
+            unit = "player",
+            barType = "trinket",
             monitored = false,
         },
     }

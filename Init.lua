@@ -46,6 +46,18 @@ local function RegisterEventHandlers()
         end
     end
 
+    handlers["UNIT_SPELLCAST_SUCCEEDED"] = function(unit, _, spellID)
+        if IsMonitorBarsEnabled() then
+            MB:OnUnitSpellcastSucceeded(unit, spellID)
+        end
+    end
+
+    handlers["PLAYER_EQUIPMENT_CHANGED"] = function()
+        if IsMonitorBarsEnabled() then
+            MB:OnEquipmentChanged()
+        end
+    end
+
     handlers["SPELL_UPDATE_CHARGES"] = function()
         if IsMonitorBarsEnabled() then
             MB:OnChargeUpdate()
