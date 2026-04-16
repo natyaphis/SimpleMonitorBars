@@ -941,6 +941,19 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         container:AddChild(chargeSlider)
     end
 
+    if barCfg.barType == "trinket" then
+        local fallbackSlider = AceGUI:Create("Slider")
+        fallbackSlider:SetLabel(L.mbTrinketFallbackDuration or "Fallback Duration (sec)")
+        fallbackSlider:SetSliderValues(0, 120, 1)
+        fallbackSlider:SetValue(tonumber(barCfg.fallbackDuration) or 0)
+        fallbackSlider:SetFullWidth(true)
+        fallbackSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.fallbackDuration = math.floor(val)
+            MB:RebuildAllBars()
+        end)
+        container:AddChild(fallbackSlider)
+    end
+
     AddMonitorHeading(container, L.mbSpecs)
 
     local specGroup = AceGUI:Create("SimpleGroup")
@@ -1746,19 +1759,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         end
 
         SetTextControlsDisabled(barCfg.showText == false)
-    end
-
-    if barCfg.barType == "trinket" then
-        local fallbackSlider = AceGUI:Create("Slider")
-        fallbackSlider:SetLabel(L.mbTrinketFallbackDuration or "Fallback Duration (sec)")
-        fallbackSlider:SetSliderValues(0, 120, 1)
-        fallbackSlider:SetValue(tonumber(barCfg.fallbackDuration) or 0)
-        fallbackSlider:SetFullWidth(true)
-        fallbackSlider:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.fallbackDuration = math.floor(val)
-            MB:RebuildAllBars()
-        end)
-        container:AddChild(fallbackSlider)
     end
 
 end
