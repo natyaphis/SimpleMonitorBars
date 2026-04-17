@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Updated addon version metadata.
+
 ## 1.6.5
 
 - Adjusted monitor bar runtime behavior.
@@ -186,8 +190,6 @@ All notable changes to this project will be documented in this file.
 ## 1.4.5
 
 - Maintenance update.
-
-## Unreleased
 
 ## 1.4.4
 
