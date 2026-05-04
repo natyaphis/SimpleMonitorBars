@@ -63,6 +63,7 @@ function ns.GetMonitorBarDefaults(options)
         outline = "OUTLINE",
         textColor = { 1.0, 1.0, 1.0, 1.0 },
         showCountText = false,
+        hideZeroCountText = false,
         countTextAnchor = "LEFT",
         countTextOffsetX = 0,
         countTextOffsetY = 0,

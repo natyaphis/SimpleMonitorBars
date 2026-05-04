@@ -1484,17 +1484,31 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     if barCfg.barType == "stack" or barCfg.barType == "charge" or barCfg.barType == "duration" or barCfg.barType == "trinket" then
         AddMonitorHeading(styleGroup, L.mbCountTextHeading or "层数文字")
 
+        local countToggleRow = AddTwoColumnRow(styleGroup)
+        countToggleRow.noAutoHeight = true
+        countToggleRow:SetHeight(COMPACT_ROW_HEIGHT)
+
         local countTextCB = AceGUI:Create("CheckBox")
         local SetCountTextControlsDisabled
         countTextCB:SetLabel(L.mbShowCountText or "显示层数文字")
         countTextCB:SetValue(barCfg.showCountText == true)
+        countTextCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
         countTextCB:SetCallback("OnValueChanged", function(_, _, val)
             barCfg.showCountText = val
             SetCountTextControlsDisabled(not val)
             Refresh()
         end)
-        countTextCB:SetFullWidth(true)
-        styleGroup:AddChild(countTextCB)
+        countToggleRow:AddChild(countTextCB)
+
+        local hideZeroCountCB = AceGUI:Create("CheckBox")
+        hideZeroCountCB:SetLabel(L.mbHideZeroCountText or "层数为零隐藏")
+        hideZeroCountCB:SetValue(barCfg.hideZeroCountText == true)
+        hideZeroCountCB:SetRelativeWidth(HALF_CONTROL_RELATIVE_WIDTH)
+        hideZeroCountCB:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.hideZeroCountText = (val == true)
+            Refresh()
+        end)
+        countToggleRow:AddChild(hideZeroCountCB)
 
         local countTextRow = AceGUI:Create("SimpleGroup")
         countTextRow:SetFullWidth(true)
@@ -1602,6 +1616,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(countColorPicker)
 
         SetCountTextControlsDisabled = function(disabled)
+            hideZeroCountCB:SetDisabled(disabled)
             countOutlineDD:SetDisabled(disabled)
             countAnchorDD:SetDisabled(disabled)
             countXSlider:SetDisabled(disabled)

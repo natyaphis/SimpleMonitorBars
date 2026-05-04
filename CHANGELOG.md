@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 - Updated addon version metadata.
 
+## 1.6.6
+
+- Added a count-text option to hide zero values without changing other monitor text behavior.
+- Refined the monitor settings layout for the new count-text toggle and updated localization text across supported locales.
+
 ## 1.6.5
 
 - Adjusted monitor bar runtime behavior.

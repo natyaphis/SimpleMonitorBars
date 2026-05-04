@@ -289,6 +289,13 @@ local function SetCountText(barFrame, text)
     if not cfg or cfg.showCountText ~= true or not barFrame._countText then
         return
     end
+    if cfg.hideZeroCountText == true then
+        local numericText = tonumber(text)
+        if numericText ~= nil and (not issecretvalue or not issecretvalue(numericText)) and numericText == 0 then
+            barFrame._countText:SetText("")
+            return
+        end
+    end
     barFrame._countText:SetText(text or "")
 end
 
