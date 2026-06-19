@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.6.7
+
+- Updated addon version metadata.
+
 ## Unreleased
 
 - Updated addon version metadata.
